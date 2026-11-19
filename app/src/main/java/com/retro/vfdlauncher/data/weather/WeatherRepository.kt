@@ -15,6 +15,7 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.time.LocalDate
+import java.time.LocalDateTime
 import java.time.format.TextStyle
 import java.util.Locale
 import kotlin.math.roundToInt
@@ -30,6 +31,8 @@ data class Weather(
     val forecast: List<DayForecast>,
     val fetchedAt: Long,
     val stale: Boolean = false,
+    /** Hourly / 15-minute forecast for the TOP-DOWN meter; null in caches from older versions. */
+    val roof: RoofInputs? = null,
 )
 
 /**
@@ -43,9 +46,10 @@ class WeatherRepository(private val context: Context) {
     val weather: StateFlow<Weather?> = _weather.asStateFlow()
 
     /** Fetch if the cache is older than [maxAgeMs]. Never throws. */
-    suspend fun refresh(maxAgeMs: Long = 30 * 60_000L) {
+    suspend fun refresh(maxAgeMs: Long = 15 * 60_000L) {
         val cached = _weather.value
-        if (cached != null && !cached.stale && System.currentTimeMillis() - cached.fetchedAt < maxAgeMs) return
+        // A cache from before the TOP-DOWN meter has no forecast: fetch now rather than wait.
+        if (cached != null && !cached.stale && cached.roof != null && System.currentTimeMillis() - cached.fetchedAt < maxAgeMs) return
         val json = withContext(Dispatchers.IO) {
             runCatching { download(currentLocation()) }.getOrNull()
         }
@@ -96,7 +100,9 @@ class WeatherRepository(private val context: Context) {
         val url = URL(
             "https://api.open-meteo.com/v1/forecast?latitude=${"%.3f".format(Locale.US, loc.first)}" +
                 "&longitude=${"%.3f".format(Locale.US, loc.second)}" +
-                "&current=temperature_2m,weather_code,is_day" +
+                "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_gusts_10m,uv_index,is_day" +
+                "&hourly=precipitation_probability,apparent_temperature,wind_gusts_10m,uv_index&forecast_hours=4" +
+                "&minutely_15=precipitation&forecast_minutely_15=13" +
                 "&daily=weather_code,temperature_2m_max&forecast_days=4&timezone=auto",
         )
         val conn = url.openConnection() as HttpURLConnection
@@ -139,6 +145,40 @@ class WeatherRepository(private val context: Context) {
                 icon = iconFor(code),
                 forecast = forecast,
                 fetchedAt = fetchedAt,
+                roof = runCatching { parseRoof(root) }.getOrNull(),
+            )
+        }
+
+        /** The TOP-DOWN meter's inputs; throws if the response predates them. */
+        fun parseRoof(root: JSONObject): RoofInputs {
+            val current = root.getJSONObject("current")
+            fun JSONObject.num(key: String) = optDouble(key, 0.0).let { if (it.isNaN()) 0.0 else it }
+            val hourly = root.getJSONObject("hourly")
+            val hTimes = hourly.getJSONArray("time")
+            val hours = (0 until hTimes.length()).map { i ->
+                HourSample(
+                    time = LocalDateTime.parse(hTimes.getString(i)),
+                    rainProbability = hourly.getJSONArray("precipitation_probability").optInt(i, 0),
+                    feelsLike = hourly.getJSONArray("apparent_temperature").optDouble(i, current.num("apparent_temperature")),
+                    gusts = hourly.getJSONArray("wind_gusts_10m").optDouble(i, 0.0),
+                    uv = hourly.getJSONArray("uv_index").optDouble(i, 0.0),
+                )
+            }
+            val quarters = root.optJSONObject("minutely_15")?.let { m ->
+                val t = m.getJSONArray("time")
+                val p = m.getJSONArray("precipitation")
+                (0 until t.length()).map { i -> RainSample(LocalDateTime.parse(t.getString(i)), p.optDouble(i, 0.0)) }
+            }.orEmpty()
+            return RoofInputs(
+                utcOffsetSeconds = root.optInt("utc_offset_seconds", 0),
+                temp = current.getDouble("temperature_2m"),
+                feelsLikeNow = current.getDouble("apparent_temperature"),
+                precipitationNow = current.num("precipitation"),
+                weatherCode = current.getInt("weather_code"),
+                gustsNow = current.num("wind_gusts_10m"),
+                uvNow = current.num("uv_index"),
+                hours = hours,
+                quarters = quarters,
             )
         }
 

@@ -10,6 +10,8 @@ import com.retro.vfdlauncher.data.media.Preset
 import com.retro.vfdlauncher.data.media.Tuning
 import com.retro.vfdlauncher.data.nav.NextTurn
 import com.retro.vfdlauncher.data.weather.DayForecast
+import com.retro.vfdlauncher.data.weather.HourSample
+import com.retro.vfdlauncher.data.weather.RoofInputs
 import com.retro.vfdlauncher.data.weather.Weather
 import com.retro.vfdlauncher.data.weather.WeatherIcon
 
@@ -47,7 +49,16 @@ private fun session(
 
 private val radio = session("com.atoto.radio", "Radio", "NIGHT 101", null, radio = true, tuning = Tuning(Band.FM, 101.1f))
 private val music = session("com.google.android.apps.youtube.music", "YT Music", "Take On Me", "A-ha", radio = false)
-private val weather = Weather(12, "CLOUDY", WeatherIcon.PARTLY, listOf(DayForecast("FRI", 13)), fetchedAt = 0)
+/** A mild, dry day: the TOP-DOWN meter says "TOP DOWN, HEATER ON". */
+private val sampleRoof = java.time.LocalDateTime.now().withMinute(0).let { h ->
+    RoofInputs(
+        utcOffsetSeconds = 3600, temp = 16.0, feelsLikeNow = 15.0, precipitationNow = 0.0, weatherCode = 2,
+        gustsNow = 20.0, uvNow = 2.0,
+        hours = (0..3).map { HourSample(h.plusHours(it.toLong()), 10, 15.0, 20.0, 2.0) },
+        quarters = emptyList(),
+    )
+}
+private val weather = Weather(12, "CLOUDY", WeatherIcon.PARTLY, listOf(DayForecast("FRI", 13)), fetchedAt = 0, roof = sampleRoof)
 private val turn = NextTurn("300 m", "Kerkstraat", "15:17", arrow = null, packageName = "com.google.android.apps.maps")
 
 private val samplePlaylists = listOf(

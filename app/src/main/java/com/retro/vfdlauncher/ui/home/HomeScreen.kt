@@ -38,6 +38,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -68,7 +73,13 @@ import com.retro.vfdlauncher.data.media.Playlist
 import com.retro.vfdlauncher.data.media.PlaylistRepository
 import com.retro.vfdlauncher.data.media.Preset
 import com.retro.vfdlauncher.data.nav.NextTurn
+import com.retro.vfdlauncher.data.weather.RoofMeter
+import com.retro.vfdlauncher.data.weather.RoofTier
+import com.retro.vfdlauncher.data.weather.RoofVerdict
 import com.retro.vfdlauncher.data.weather.Weather
+import com.retro.vfdlauncher.ui.theme.Mr2Icon
+import java.time.LocalDateTime
+import java.time.ZoneOffset
 import com.retro.vfdlauncher.data.weather.WeatherIcon
 import com.retro.vfdlauncher.ui.theme.Vfd
 import com.retro.vfdlauncher.ui.theme.VfdIcons
@@ -185,7 +196,7 @@ fun HomeScreen(state: HomeState, actions: HomeActions) {
             if (turn != null) {
                 NextTurnPanel(turn, { actions.onSlot(Slot.MAPS) }, Modifier.offset(860.dp, 108.dp).size(380.dp, 96.dp))
             } else {
-                WeatherPanel(state.weather, Modifier.offset(860.dp, 108.dp).size(380.dp, 96.dp))
+                WeatherOrRoofPanel(state.weather, Modifier.offset(860.dp, 108.dp).size(380.dp, 96.dp))
             }
             AppGrid(actions, Modifier.offset(860.dp, 220.dp).width(380.dp))
             VolumePanel(state.volume, actions, Modifier.offset(860.dp, 604.dp).size(380.dp, 84.dp))
@@ -826,6 +837,81 @@ private fun NextTurnPanel(turn: NextTurn, onOpen: () -> Unit, modifier: Modifier
                     BasicText(turn.eta, style = glow(Vfd.Amber, 24.sp, 2.sp, blur = 6f))
                 }
             }
+        }
+    }
+}
+
+/**
+ * Not navigating: the TOP-DOWN meter (canvas artboards 4-8) when the forecast has the data,
+ * else the plain weather. Tap to switch between the two.
+ */
+@Composable
+private fun WeatherOrRoofPanel(weather: Weather?, modifier: Modifier) {
+    val roof = weather?.roof
+    var showWeather by remember { mutableStateOf(false) }
+    if (roof == null) {
+        WeatherPanel(weather, modifier)
+        return
+    }
+    // Re-evaluate every minute: "TILL 17:40" and the hour windows move with the clock.
+    var minute by remember { mutableLongStateOf(System.currentTimeMillis() / 60_000L) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(60_000L - System.currentTimeMillis() % 60_000L + 50L)
+            minute = System.currentTimeMillis() / 60_000L
+        }
+    }
+    val verdict = remember(roof, minute) {
+        RoofMeter.evaluate(roof, LocalDateTime.now(ZoneOffset.ofTotalSeconds(roof.utcOffsetSeconds)))
+    }
+    Box(
+        modifier.clickable(remember { MutableInteractionSource() }, indication = null) { showWeather = !showWeather },
+    ) {
+        if (showWeather) WeatherPanel(weather, Modifier.fillMaxSize()) else TopDownMeter(verdict, Modifier.fillMaxSize())
+    }
+}
+
+private val RoofRed = Color(0xFFFF6A4D)
+
+@Composable
+private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
+    val color = when (v.tier) {
+        RoofTier.GOOD -> Vfd.Teal
+        RoofTier.OK -> Vfd.Amber
+        RoofTier.BAD -> RoofRed
+    }
+    Row(
+        modifier
+            .vfdPanel()
+            .semantics(mergeDescendants = true) {
+                contentDescription = "Top-down meter ${v.score} out of 10, ${v.temp} degrees, ${v.verdict}"
+            }
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        val car = rememberVectorPainter(if (v.roofDown) Mr2Icon.RoofDown else Mr2Icon.RoofUp)
+        Box(Modifier.size(104.dp, 35.dp)) {
+            // Phosphor glow: a blurred copy under the line art.
+            Image(car, null, Modifier.fillMaxSize().blur(4.dp, BlurredEdgeTreatment.Unbounded), alpha = 0.7f)
+            Image(car, null, Modifier.fillMaxSize())
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom,
+            ) {
+                BasicText("TOP-DOWN ${v.score}/10", style = glow(Vfd.Teal, 18.sp, 3.sp, blur = 4f))
+                BasicText("${v.temp}°", style = glow(Vfd.Teal, 26.sp, blur = 8f).copy(lineHeight = 1.em))
+            }
+            SegmentBar(total = 10, lit = v.score, height = 14.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) { color }
+            BasicText(
+                v.verdict,
+                style = glow(Vfd.Amber, 18.sp, 1.sp, blur = 6f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
