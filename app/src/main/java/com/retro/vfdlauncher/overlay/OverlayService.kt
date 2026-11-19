@@ -128,12 +128,12 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wm.currentWindowMetrics.bounds
         else Rect(0, 0, resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
 
-    /** Navigation bar (if any) along the bottom, so the bar is not drawn under it. */
-    private fun bottomInset(): Int =
+    /** Navigation bar / cutout on the left edge (landscape), so the rail is not drawn under it. */
+    private fun leftInset(): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             wm.currentWindowMetrics.windowInsets
                 .getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout())
-                .bottom
+                .left
         } else 0
 
     /** Same fit rule as the home screen canvas: design px x min(width/1280, height/720). */
@@ -173,10 +173,10 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
         PixelFormat.TRANSLUCENT,
     ).apply {
-        gravity = Gravity.BOTTOM or Gravity.START
-        val margin = (24 * barScale()).toInt()
-        x = margin
-        y = margin + bottomInset()
+        // Vertical rail on the left edge, centred: Maps' own buttons sit top, bottom and right.
+        gravity = Gravity.START or Gravity.CENTER_VERTICAL
+        x = (16 * barScale()).toInt() + leftInset()
+        y = 0
     }
 
     private fun startInForeground() {

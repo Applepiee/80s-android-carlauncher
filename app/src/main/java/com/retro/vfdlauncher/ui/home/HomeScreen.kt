@@ -350,7 +350,8 @@ private fun MusicDisplay(state: HomeState) {
 
     // "{playlist} · TRACK x/y": the app's queue title, else the playlist last picked here, else the app.
     val picked = state.playlists.getOrNull(state.currentPlaylist)?.name?.takeIf { it.isNotBlank() }
-    val source = (np?.queueTitle ?: picked ?: np?.appLabel ?: "YT MUSIC").uppercase(Locale.getDefault())
+    val queueName = np?.queueTitle?.takeUnless { it.trim().lowercase(Locale.ROOT) in GENERIC_QUEUE_TITLES }
+    val source = (queueName ?: picked ?: np?.appLabel ?: "YT MUSIC").uppercase(Locale.getDefault())
     val header = np?.queuePosition?.let { "$source · TRACK $it" } ?: source
     val title = when {
         !state.hasMediaAccess -> "TAP TO ALLOW"
@@ -400,6 +401,12 @@ private fun MusicDisplay(state: HomeState) {
         SegmentBar(total = 40, lit = done, height = 18.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) { Vfd.Teal }
     }
 }
+
+/** Queue titles apps use when no playlist is playing ("Up next" in YouTube Music); not shown as a name. */
+private val GENERIC_QUEUE_TITLES = setOf(
+    "up next", "now playing", "queue", "play queue", "playing next",
+    "volgende", "als volgende", "wachtrij", "nu aan het afspelen", "nu afspelen",
+)
 
 private fun mmss(ms: Long): String {
     val s = ms / 1000
