@@ -1,6 +1,8 @@
 package com.retro.vfdlauncher.ui.picker
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -15,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items as gridItems
 import androidx.compose.foundation.Image
@@ -138,10 +141,15 @@ fun AppPicker(
     }
 }
 
-/** APPS button: every launcher app as a VFD tile grid. Tap opens, long-press does nothing yet. */
+/**
+ * APPS button: a FAVORITES row (amber) on top, then every launcher app, as VFD tiles.
+ * Tap opens; long-press pins an app to FAVORITES or unpins it.
+ */
 @Composable
 fun AppDrawer(
     entries: List<AppEntry>,
+    favorites: List<android.content.ComponentName>,
+    onToggleFavorite: (AppEntry) -> Unit,
     loadIcon: suspend (android.content.ComponentName) -> android.graphics.Bitmap?,
     onOpen: (AppEntry) -> Unit,
     onDismiss: () -> Unit,
@@ -159,44 +167,93 @@ fun AppDrawer(
             if (entries.isEmpty()) {
                 BasicText("SCANNING…", style = glow(Vfd.Amber, 22.sp, 4.sp, blur = 6f))
             } else {
+                val byComponent = entries.associateBy { it.component }
+                val pinned = favorites.mapNotNull { byComponent[it] }
+                val pinnedSet = pinned.map { it.component }.toSet()
+                val rest = entries.filter { it.component !in pinnedSet }
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(6),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    gridItems(entries, key = { it.id }) { e ->
-                        val icon by produceState<android.graphics.Bitmap?>(null, e.component) {
-                            value = loadIcon(e.component)
-                        }
-                        VfdButton(
-                            Modifier
-                                .fillMaxWidth()
-                                .height(120.dp),
-                            border = Vfd.Teal.copy(alpha = 0.4f),
-                            onClickLabel = "Open ${e.label}",
-                            onClick = { onOpen(e) },
-                        ) {
-                            Column(
-                                Modifier.padding(horizontal = 6.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                    item(key = "h-fav", span = { GridItemSpan(maxLineSpan) }) {
+                        SectionLabel("FAVORITES", Vfd.Amber)
+                    }
+                    if (pinned.isEmpty()) {
+                        item(key = "fav-hint", span = { GridItemSpan(maxLineSpan) }) {
+                            Box(
+                                Modifier
+                                    .fillMaxWidth()
+                                    .height(120.dp)
+                                    .border(2.dp, Vfd.Amber.copy(alpha = 0.35f), RoundedCornerShape(10.dp)),
+                                contentAlignment = Alignment.Center,
                             ) {
-                                Box(Modifier.size(48.dp)) {
-                                    icon?.let {
-                                        Image(it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(48.dp))
-                                    }
-                                }
                                 BasicText(
-                                    e.label.uppercase(),
-                                    style = glow(Vfd.Teal, 18.sp, 1.sp, blur = 0f).copy(textAlign = TextAlign.Center),
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
+                                    "LONG-PRESS AN APP BELOW TO PIN IT HERE",
+                                    style = glow(Vfd.Amber.copy(alpha = 0.8f), 18.sp, 3.sp, blur = 0f),
                                 )
                             }
                         }
+                    } else {
+                        gridItems(pinned, key = { "fav-" + it.id }) { e ->
+                            AppTile(e, Vfd.Amber, loadIcon, { onOpen(e) }, { onToggleFavorite(e) })
+                        }
+                    }
+                    item(key = "h-all", span = { GridItemSpan(maxLineSpan) }) {
+                        SectionLabel("ALL APPS", Vfd.Teal)
+                    }
+                    gridItems(rest, key = { it.id }) { e ->
+                        AppTile(e, Vfd.Teal, loadIcon, { onOpen(e) }, { onToggleFavorite(e) })
                     }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun SectionLabel(text: String, color: Color) {
+    BasicText(text, Modifier.padding(top = 4.dp), style = glow(color, 18.sp, 4.sp, blur = 6f))
+}
+
+@Composable
+private fun AppTile(
+    e: AppEntry,
+    color: Color,
+    loadIcon: suspend (android.content.ComponentName) -> android.graphics.Bitmap?,
+    onOpen: () -> Unit,
+    onLongPress: () -> Unit,
+) {
+    val icon by produceState<android.graphics.Bitmap?>(null, e.component) {
+        value = loadIcon(e.component)
+    }
+    val pinned = color == Vfd.Amber
+    VfdButton(
+        Modifier
+            .fillMaxWidth()
+            .height(120.dp),
+        border = if (pinned) Vfd.Amber else Vfd.Teal.copy(alpha = 0.4f),
+        fill = if (pinned) Vfd.Amber.copy(alpha = 0.08f) else Color.Transparent,
+        onClickLabel = "Open ${e.label}",
+        onLongClick = onLongPress,
+        onClick = onOpen,
+    ) {
+        Column(
+            Modifier.padding(horizontal = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.size(48.dp)) {
+                icon?.let {
+                    Image(it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(48.dp))
+                }
+            }
+            BasicText(
+                e.label.uppercase(),
+                style = glow(color, 18.sp, 1.sp, blur = 0f).copy(textAlign = TextAlign.Center),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }

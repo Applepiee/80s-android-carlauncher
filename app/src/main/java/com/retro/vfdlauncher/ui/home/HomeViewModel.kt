@@ -9,6 +9,7 @@ import androidx.lifecycle.viewModelScope
 import com.retro.vfdlauncher.data.apps.AppEntry
 import com.retro.vfdlauncher.data.apps.AppRepository
 import com.retro.vfdlauncher.data.apps.Slot
+import com.retro.vfdlauncher.data.audio.AudioSpectrum
 import com.retro.vfdlauncher.data.audio.VolumeRepository
 import com.retro.vfdlauncher.data.media.MediaRepository
 import com.retro.vfdlauncher.data.media.NowPlaying
@@ -40,6 +41,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val mediaRepo = MediaRepository(app, viewModelScope, volumeRepo)
     private val presetRepo = PresetRepository(app)
     val appRepo = AppRepository(app)
+    /** Real spectrum for the analysers; started/stopped with the activity. */
+    val spectrum = AudioSpectrum(app)
     private val prefs = app.getSharedPreferences("home", Context.MODE_PRIVATE)
 
     val weather = weatherRepo.weather
@@ -78,6 +81,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _drawer = MutableStateFlow<List<AppEntry>?>(null)
     val drawer: StateFlow<List<AppEntry>?> = _drawer.asStateFlow()
+
+    /** Pinned apps for the top row of the drawer. */
+    private val _favorites = MutableStateFlow(appRepo.favorites())
+    val favorites: StateFlow<List<ComponentName>> = _favorites.asStateFlow()
 
     private val _inspector = MutableStateFlow<String?>(null)
     val inspector: StateFlow<String?> = _inspector.asStateFlow()
@@ -129,6 +136,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     override fun onCleared() {
+        spectrum.stop()
         volumeRepo.stop()
         mediaRepo.stop()
     }
@@ -227,6 +235,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun openDrawer() {
         _drawer.value = emptyList()
         viewModelScope.launch { _drawer.value = appRepo.allEntries(includeHidden = false, refresh = true) }
+    }
+
+    fun toggleFavorite(component: ComponentName) {
+        _favorites.value = appRepo.toggleFavorite(component)
     }
 
     fun closeDrawer() {

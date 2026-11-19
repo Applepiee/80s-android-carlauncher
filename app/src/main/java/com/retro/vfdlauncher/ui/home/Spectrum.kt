@@ -3,6 +3,9 @@ package com.retro.vfdlauncher.ui.home
 import androidx.compose.foundation.Canvas
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
@@ -40,8 +43,16 @@ private fun level(bar: Int, time: Float): Float {
 }
 
 /**
- * Segmented analyser ([bars] columns of [segment]-tall segments every [period]). It is an animation, not real audio: it runs while [playing]
- * and freezes in place when paused, like animation-play-state on the canvas.
+ * Live band levels (0..1) from [com.retro.vfdlauncher.data.audio.AudioSpectrum], provided by
+ * MainActivity. Null = no real audio available, use the animation. Read only in the draw phase,
+ * so 20 updates a second redraw the bars without recomposing the screen.
+ */
+val LocalSpectrumLevels = staticCompositionLocalOf<State<FloatArray?>> { mutableStateOf(null) }
+
+/**
+ * Segmented analyser ([bars] columns of [segment]-tall segments every [period]). Shows the real
+ * spectrum from [LocalSpectrumLevels] while [playing]; without it (no permission, no signal)
+ * it falls back to the canvas animation, which freezes in place when paused.
  * Throttled to ~30 fps; only the draw phase re-runs per frame.
  */
 @Composable
@@ -56,6 +67,7 @@ fun SpectrumAnalyzer(
     amberModulo: Int = 7,
     amberIndex: Int = 3,
 ) {
+    val live = LocalSpectrumLevels.current
     val time = remember { mutableFloatStateOf(0f) }
     LaunchedEffect(playing) {
         if (!playing) return@LaunchedEffect
@@ -82,7 +94,9 @@ fun SpectrumAnalyzer(
         for (i in 0 until bars) {
             val x = i * (barW + gapPx)
             val color = if (i % amberModulo == amberIndex) Vfd.Amber else Vfd.Teal
-            val lit = (level(i, t) * segments + 0.5f).toInt().coerceIn(0, segments)
+            val real = if (playing) live.value else null
+            val lvl = if (real != null && real.isNotEmpty()) real[i * real.size / bars] else level(i, t)
+            val lit = (lvl * segments + 0.5f).toInt().coerceIn(0, segments)
             // Phosphor glow behind the lit run.
             if (lit > 0) {
                 val top = size.height - lit * periodPx + (periodPx - seg)

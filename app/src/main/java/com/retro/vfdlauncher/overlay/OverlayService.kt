@@ -7,12 +7,15 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.os.Build
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
 import android.view.View
+import android.view.WindowInsets
 import android.view.WindowManager
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
@@ -69,6 +72,14 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         }
     }
 
+    /** Fold/unfold or rotation: rebuild the bar at the new scale and position. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        val b = bar ?: return
+        runCatching { wm.removeView(b) }
+        bar = createBar().also { runCatching { wm.addView(it, barParams()) } }
+    }
+
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -94,19 +105,41 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         }
     }
 
-    private fun createBar(): View = ComposeView(this).apply {
+    private fun createBar(): View = FullWidthHost(this).apply {
         setViewTreeLifecycleOwner(this@OverlayService)
         setViewTreeSavedStateRegistryOwner(this@OverlayService)
-        setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
-        val scale = resources.displayMetrics.widthPixels / 1280f
-        setContent {
-            FloatingBar(
-                scale = scale,
-                media = media,
-                volume = volume,
-                onHome = ::goHome,
-            )
-        }
+        addView(
+            ComposeView(this@OverlayService).apply {
+                setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnDetachedFromWindow)
+                setContent {
+                    FloatingBar(
+                        scale = barScale(),
+                        media = media,
+                        volume = volume,
+                        onHome = ::goHome,
+                    )
+                }
+            },
+        )
+    }
+
+    /** Current window bounds; the display can change size (fold/unfold, rotation). */
+    private fun screenBounds(): Rect =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wm.currentWindowMetrics.bounds
+        else Rect(0, 0, resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
+
+    /** Navigation bar (if any) along the bottom, so the bar is not drawn under it. */
+    private fun bottomInset(): Int =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            wm.currentWindowMetrics.windowInsets
+                .getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout())
+                .bottom
+        } else 0
+
+    /** Same fit rule as the home screen canvas: design px x min(width/1280, height/720). */
+    private fun barScale(): Float {
+        val b = screenBounds()
+        return minOf(b.width() / 1280f, b.height() / 720f)
     }
 
     private fun goHome() {
@@ -141,9 +174,9 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         PixelFormat.TRANSLUCENT,
     ).apply {
         gravity = Gravity.BOTTOM or Gravity.START
-        val scale = resources.displayMetrics.widthPixels / 1280f
-        x = (24 * scale).toInt()
-        y = (24 * scale).toInt()
+        val margin = (24 * barScale()).toInt()
+        x = margin
+        y = margin + bottomInset()
     }
 
     private fun startInForeground() {
@@ -172,5 +205,17 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
             if (!Settings.canDrawOverlays(context)) return
             runCatching { context.startForegroundService(Intent(context, OverlayService::class.java)) }
         }
+    }
+}
+
+/**
+ * Host for the bar's ComposeView. A WRAP_CONTENT overlay window is first measured at the system's
+ * dialog width (about 1100 px on the HONOR) and Compose never asks for more, so the bar was cut
+ * off after the play button. Measuring the content against the full screen width fixes that.
+ */
+private class FullWidthHost(context: Context) : android.widget.FrameLayout(context) {
+    override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
+        val full = MeasureSpec.makeMeasureSpec(resources.displayMetrics.widthPixels, MeasureSpec.AT_MOST)
+        super.onMeasure(full, heightMeasureSpec)
     }
 }

@@ -15,6 +15,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.core.view.WindowCompat
@@ -22,12 +23,14 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.retro.vfdlauncher.data.apps.Slot
+import com.retro.vfdlauncher.data.nav.NavigationState
 import com.retro.vfdlauncher.overlay.OverlayBus
 import com.retro.vfdlauncher.overlay.OverlayService
 import com.retro.vfdlauncher.ui.home.HomeActions
 import com.retro.vfdlauncher.ui.home.HomeScreen
 import com.retro.vfdlauncher.ui.home.HomeState
 import com.retro.vfdlauncher.ui.home.HomeViewModel
+import com.retro.vfdlauncher.ui.home.LocalSpectrumLevels
 import com.retro.vfdlauncher.ui.home.ScaledDesignCanvas
 import com.retro.vfdlauncher.ui.home.Source
 import com.retro.vfdlauncher.ui.picker.AppDrawer
@@ -39,9 +42,11 @@ class MainActivity : ComponentActivity() {
 
     private val vm: HomeViewModel by viewModels()
 
-    private val locationPermission =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) vm.onLocationGranted()
+    /** Location (weather) and microphone access (the real spectrum analyser), asked together at first start. */
+    private val permissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
+            if (granted[Manifest.permission.ACCESS_COARSE_LOCATION] == true) vm.onLocationGranted()
+            if (granted[Manifest.permission.RECORD_AUDIO] == true) vm.spectrum.start()
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -58,9 +63,9 @@ class MainActivity : ComponentActivity() {
             }
         })
 
-        if (checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            locationPermission.launch(Manifest.permission.ACCESS_COARSE_LOCATION)
-        }
+        val missing = listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.RECORD_AUDIO)
+            .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        if (missing.isNotEmpty()) permissions.launch(missing.toTypedArray())
 
         setContent {
             val source by vm.source.collectAsStateWithLifecycle()
@@ -75,6 +80,7 @@ class MainActivity : ComponentActivity() {
             val picker by vm.picker.collectAsStateWithLifecycle()
             val drawer by vm.drawer.collectAsStateWithLifecycle()
             val inspector by vm.inspector.collectAsStateWithLifecycle()
+            val favorites by vm.favorites.collectAsStateWithLifecycle()
             val scope = rememberCoroutineScope()
 
             val actions = HomeActions(
@@ -100,7 +106,7 @@ class MainActivity : ComponentActivity() {
                 onInspect = vm::openInspector,
             )
 
-            Box {
+            CompositionLocalProvider(LocalSpectrumLevels provides vm.spectrum.levels) { Box {
                 HomeScreen(
                     HomeState(source, radio, music, hasAccess, weather, nextTurn, volume, presets, toggles),
                     actions,
@@ -122,6 +128,8 @@ class MainActivity : ComponentActivity() {
                             )
                             d != null -> AppDrawer(
                                 entries = d,
+                                favorites = favorites,
+                                onToggleFavorite = { vm.toggleFavorite(it.component) },
                                 loadIcon = { vm.appRepo.icon(it, 96) },
                                 onOpen = {
                                     vm.closeDrawer()
@@ -133,7 +141,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
-            }
+            } }
         }
     }
 
@@ -151,12 +159,14 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         hideSystemBars()
         vm.onResume()
+        vm.spectrum.start()
         OverlayService.ensureRunning(this)
     }
 
     override fun onPause() {
         super.onPause()
         vm.onPause()
+        vm.spectrum.stop()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
@@ -179,7 +189,9 @@ class MainActivity : ComponentActivity() {
      */
     private fun launchApp(intent: Intent, crt: Boolean): Boolean {
         if (!Settings.canDrawOverlays(this) && askOverlayOnce()) return true
-        OverlayBus.setCrtWanted(crt)
+        // CRT over navigation apps however they were opened (MAPS key, drawer, favourites).
+        val pkg = intent.component?.packageName ?: intent.`package`
+        OverlayBus.setCrtWanted(crt || pkg in NavigationState.NAV_PACKAGES)
         OverlayService.ensureRunning(this)
         return safeStart(intent)
     }

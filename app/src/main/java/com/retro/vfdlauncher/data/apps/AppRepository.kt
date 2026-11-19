@@ -151,11 +151,29 @@ class AppRepository(private val context: Context) {
         Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
 
+    // ---- Favourites: the pinned row at the top of the APPS drawer, in the order they were added ----
+
+    fun favorites(): List<ComponentName> =
+        prefs.getString(KEY_FAVORITES, null).orEmpty()
+            .split('|')
+            .filter { it.isNotBlank() }
+            .mapNotNull { ComponentName.unflattenFromString(it) }
+
+    /** Pins the app if it isn't pinned, unpins it if it is. Returns the new list. */
+    fun toggleFavorite(component: ComponentName): List<ComponentName> {
+        val list = favorites().toMutableList()
+        if (!list.remove(component)) list.add(component)
+        prefs.edit().putString(KEY_FAVORITES, list.joinToString("|") { it.flattenToString() }).apply()
+        return list
+    }
+
     fun labelFor(component: ComponentName?): String? = component?.let {
         runCatching { pm.getActivityInfo(it, 0).loadLabel(pm).toString() }.getOrNull()
     }
 
     companion object {
+        private const val KEY_FAVORITES = "favorites"
+
         /** Package/label fragments seen on head units for the Android Auto receiver, best first. */
         val AA_HINTS = listOf(
             "android auto", "androidauto", "gearhead", "aauto", "zlink", "autolink",

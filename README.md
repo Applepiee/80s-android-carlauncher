@@ -9,12 +9,12 @@ no root, no system privileges.
 | Feature | How |
 |---|---|
 | Source switch | **RADIO / YT MUSIC** tabs at the top. Tapping one starts that app's playback and pauses the other (or opens the app if it isn't running yet). The screen also follows the audio: start Spotify from the steering wheel and it flips to the music view. **Long-press** a tab to pick which app it controls. |
-| Radio | Big frequency, preset/manual label, station name and a small analyser. Six station keys: **long-press** to store the current station (frequency + name), tap to recall (uses the radio app's queue if it publishes one, otherwise steps next/previous until the frequency matches). SEEK = next/previous, TUNE = fast-forward/rewind (most head-unit radio apps map these to a manual step), MUTE mutes the music stream. |
+| Radio | Big frequency, preset/manual label, station name and a small analyser. Six station keys: **long-press** to store the current station (frequency + name), tap to recall (uses the radio app's queue if it publishes one, otherwise steps next/previous until the frequency matches). The analysers show the real spectrum of what is playing (Visualizer on the output mix; asks for microphone access, nothing is recorded) and fall back to an animation without permission or signal. SEEK = next/previous, TUNE = fast-forward/rewind (most head-unit radio apps map these to a manual step), MUTE mutes the music stream. |
 | YT Music | Title, artist, elapsed/length and a 40-segment progress bar. PREV / PLAY / NEXT, SHUFFLE and REPEAT (sent the way AndroidX media controllers do), LIKE (the app's thumbs-up custom action, if it has one). |
 | Next turn | While Google Maps navigates, its turn-by-turn notification feeds the top-right panel (arrow, distance, street, ETA). Tap it to open Maps. Otherwise the panel shows the weather. |
 | Weather | [Open-Meteo](https://open-meteo.com) (no key), unit location or a fixed fallback (`WeatherRepository.FALLBACK_LAT/LON`, Brussels). Cached; `OFFLINE` when older than 3 h. |
-| Apps | MAPS, ANDROID AUTO, CAMERA, SETTINGS are auto-detected; **long-press** to reassign (the picker can show hidden system activities, where head units keep the Android Auto receiver). APPS opens an app drawer. |
-| Floating controls | Apps opened from the launcher get the floating VFD bar (home, now playing, prev/play/next, volume, collapsible). Maps and Android Auto also get the CRT overlay (scanlines, vignette, teal tint), drawn at window alpha 0.8 and not touchable so touches reach the app. Needs "display over other apps", asked the first time you open an app. |
+| Apps | MAPS, ANDROID AUTO, CAMERA, SETTINGS are auto-detected; **long-press** to reassign (the picker can show hidden system activities, where head units keep the Android Auto receiver). APPS opens an app drawer; **long-press** an app there to pin it to the FAVORITES row at the top (long-press again to unpin). |
+| Floating controls | Apps opened from the launcher get the floating VFD bar (home, now playing, prev/play/next, volume, collapsible). Maps (however it is opened from the launcher) and Android Auto also get the CRT overlay: heavy scanlines, RGB phosphor stripes, a curved-glass bezel with colour fringing, deep vignette and a slow rolling refresh band. It is drawn at window alpha 0.8 and not touchable so touches reach the app; it cannot bend the app's own pixels (that would need screen capture), so curvature is suggested by the bezel. Needs "display over other apps", asked the first time you open an app. |
 | Volume | Music stream, 20 segments, follows hardware knobs. |
 | Clock | Updates on the minute; follows 12/24 h. |
 | Session inspector | **Long-press the big display** to dump every media session (actions, metadata, queue, custom actions). Use this on the S8L to see what ATOTO's radio app supports. |
@@ -29,7 +29,8 @@ app/src/main/java/com/retro/vfdlauncher/
   MainActivity.kt              HOME activity, landscape, immersive, Back does nothing
   ui/theme/                    VFD colours, fonts, glow text, line icons
   ui/home/HomeScreen.kt        the 1280×720 layout, scaled to fit any screen
-  ui/home/Spectrum.kt          the analysers
+  ui/home/Spectrum.kt          the analysers (real spectrum, animation as fallback)
+  data/audio/AudioSpectrum.kt  Visualizer on the output mix -> 14 log bands
   ui/home/HomeViewModel.kt     state + actions
   ui/picker/                   app picker and session inspector overlays
   data/weather/                Open-Meteo client + cache
