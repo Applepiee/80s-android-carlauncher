@@ -845,6 +845,7 @@ private fun NextTurnPanel(turn: NextTurn, onOpen: () -> Unit, modifier: Modifier
  * Not navigating: the TOP-DOWN meter (canvas artboards 4-8) when the forecast has the data,
  * else the plain weather. Tap to switch between the two.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun WeatherOrRoofPanel(weather: Weather?, modifier: Modifier) {
     val roof = weather?.roof
@@ -861,17 +862,42 @@ private fun WeatherOrRoofPanel(weather: Weather?, modifier: Modifier) {
             minute = System.currentTimeMillis() / 60_000L
         }
     }
-    val verdict = remember(roof, minute) {
+    val live = remember(roof, minute) {
         RoofMeter.evaluate(roof, LocalDateTime.now(ZoneOffset.ofTotalSeconds(roof.utcOffsetSeconds)))
     }
+    // Long-press: show off the three canvas cases for 8 s, then back to the live forecast.
+    var demo by remember { mutableStateOf(-1) }
+    LaunchedEffect(demo) {
+        if (demo >= 0) {
+            delay(8_000)
+            demo = -1
+        }
+    }
     Box(
-        modifier.clickable(remember { MutableInteractionSource() }, indication = null) { showWeather = !showWeather },
+        modifier.combinedClickable(
+            interactionSource = remember { MutableInteractionSource() },
+            indication = null,
+            onLongClickLabel = "Show demo weather",
+            onLongClick = { showWeather = false; demo = (demo + 1) % ROOF_DEMOS.size },
+            onClickLabel = "Switch between top-down meter and weather",
+            onClick = { demo = -1; showWeather = !showWeather },
+        ),
     ) {
-        if (showWeather) WeatherPanel(weather, Modifier.fillMaxSize()) else TopDownMeter(verdict, Modifier.fillMaxSize())
+        when {
+            showWeather -> WeatherPanel(weather, Modifier.fillMaxSize())
+            else -> TopDownMeter(ROOF_DEMOS.getOrNull(demo) ?: live, Modifier.fillMaxSize())
+        }
     }
 }
 
 private val RoofRed = Color(0xFFFF6A4D)
+
+/** The three cases from the canvas, for the long-press demo. */
+private val ROOF_DEMOS = listOf(
+    RoofVerdict(9, 24, "GO TOPLESS!", roofDown = true, tier = RoofTier.GOOD),
+    RoofVerdict(6, 14, "TOP DOWN, HEATER ON", roofDown = true, tier = RoofTier.OK),
+    RoofVerdict(2, 11, "ROOF UP · RAIN 17:40", roofDown = false, tier = RoofTier.BAD),
+)
 
 @Composable
 private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
@@ -891,10 +917,14 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         val car = rememberVectorPainter(if (v.roofDown) Mr2Icon.RoofDown else Mr2Icon.RoofUp)
+        val clock = rememberWeatherClock()
         Box(Modifier.size(104.dp, 35.dp)) {
-            // Phosphor glow: a blurred copy under the line art.
-            Image(car, null, Modifier.fillMaxSize().blur(4.dp, BlurredEdgeTreatment.Unbounded), alpha = 0.7f)
+            // Phosphor glow: blurred copies under the line art and the animated weather.
+            val glowLayer = Modifier.fillMaxSize().blur(4.dp, BlurredEdgeTreatment.Unbounded)
+            Image(car, null, glowLayer, alpha = 0.7f)
+            RoofWeatherFx(v.roofDown, clock, glowLayer)
             Image(car, null, Modifier.fillMaxSize())
+            RoofWeatherFx(v.roofDown, clock, Modifier.fillMaxSize())
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(

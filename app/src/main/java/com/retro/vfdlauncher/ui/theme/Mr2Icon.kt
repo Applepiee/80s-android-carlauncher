@@ -10,7 +10,8 @@ import androidx.compose.ui.unit.dp
 
 /**
  * Toyota MR2 Spyder side view from the TOP-DOWN meter on the canvas (120x40 viewBox), drawn in
- * amber line-art with its own colours, roof up (with rain) or down (with sun and breeze).
+ * amber line-art, roof up or down. The rain, sun and breeze around it are animated separately
+ * ([com.retro.vfdlauncher.ui.home.RoofWeatherFx]).
  */
 object Mr2Icon {
 
@@ -38,15 +39,10 @@ object Mr2Icon {
     private val roofUp = listOf(
         Line("M55.6 5.7C58 4.6 61 4.4 66 4.4H74C77.5 4.8 80.5 6 83 7.6C86 9.5 89 11.6 92 12.5", 1.9f),
         Line("M50 15C52 11 54.5 8.6 58 8.1L68 8.2C71 8.4 72.6 9.8 73 11.5L73.2 15", 1.1f),
-        Line("M22 3v4M34 2v4M99 4v4M108 3v4M116 6v4", 1.3f, Vfd.Teal), // rain
     )
 
     private val roofDown = listOf(
         Line("M70.6 14.6C70.6 10.6 71.4 9 72.5 9C73.6 9 74 10.4 74 12.4", 1.5f), // folded roof
-        Line("M96.8 5a3.2 3.2 0 1 0 6.4 0a3.2 3.2 0 1 0 -6.4 0z", 1.3f, Vfd.Teal), // sun
-        Line("M100 -1v1.6M106 5h-1.6M94 5h1.6M95.8 0.8l1.1 1.1M104.2 0.8l-1.1 1.1", 1.3f, Vfd.Teal),
-        // Breeze; the canvas draws these dashed (3 / 2.5), spelled out here.
-        Line("M0 10h3M5.5 10h3M11 10h2M4 14h3M9.5 14h3", 1.1f, Vfd.Teal),
     )
 
     private fun build(name: String, lines: List<Line>): ImageVector =
