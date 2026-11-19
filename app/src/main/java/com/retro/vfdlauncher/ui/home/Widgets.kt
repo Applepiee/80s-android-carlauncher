@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import com.retro.vfdlauncher.ui.theme.Vfd
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Shape
@@ -38,7 +40,7 @@ fun VfdButton(
     borderWidth: Dp = 2.dp,
     shape: Shape = RoundedCornerShape(10.dp),
     fill: Color = Color.Transparent,
-    pressedFill: Color = border.copy(alpha = 0.10f),
+    pressedFill: Color = Vfd.Teal.copy(alpha = 0.20f),
     onLongClick: (() -> Unit)? = null,
     onClickLabel: String? = null,
     onClick: () -> Unit,
@@ -48,6 +50,12 @@ fun VfdButton(
     val pressed by interaction.collectIsPressedAsState()
     Box(
         modifier = modifier
+            .graphicsLayer {
+                // Same 0.97 press squeeze as the canvas' :active state.
+                val k = if (pressed) 0.97f else 1f
+                scaleX = k
+                scaleY = k
+            }
             .clip(shape)
             .background(if (pressed) pressedFill else fill)
             .border(borderWidth, border, shape)

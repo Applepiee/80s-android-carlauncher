@@ -9,12 +9,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.provider.MediaStore
 import android.provider.Settings
+import androidx.core.graphics.drawable.toBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.Locale
 
-/** The four assignable buttons plus Android Auto. */
+/** Buttons whose app can be reassigned by long-press. RADIO and MUSIC are the two audio sources. */
 enum class Slot(val key: String, val label: String) {
+    MAPS("maps", "MAPS"),
     ANDROID_AUTO("aa", "ANDROID AUTO"),
     RADIO("radio", "RADIO"),
     MUSIC("music", "MUSIC"),
@@ -108,7 +110,8 @@ class AppRepository(private val context: Context) {
         val words = when (slot) {
             Slot.ANDROID_AUTO -> AA_HINTS
             Slot.RADIO -> listOf("radio", "fmradio", ".fm", "tuner")
-            Slot.MUSIC -> listOf("spotify", "music", "player", "deezer", "tidal")
+            Slot.MAPS -> listOf("com.google.android.apps.maps", "waze", "osmand", "maps", "navi")
+            Slot.MUSIC -> listOf("com.google.android.apps.youtube.music", "yt music", "spotify", "music", "deezer", "tidal")
             Slot.CAMERA -> listOf("avm", "dvr", "reverse", "backcar", "rearview", "camera")
             Slot.SETTINGS -> return null // handled by the system Settings intent
         }
@@ -130,10 +133,23 @@ class AppRepository(private val context: Context) {
             slot == Slot.SETTINGS -> Intent(Settings.ACTION_SETTINGS)
             slot == Slot.CAMERA -> Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
             slot == Slot.MUSIC -> Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MUSIC)
+            slot == Slot.MAPS -> Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MAPS)
             else -> null
         }
         return intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
     }
+
+    /** Package the slot resolves to, used to match media sessions to the RADIO / MUSIC source. */
+    suspend fun packageFor(slot: Slot): String? = (assigned(slot) ?: autoDetect(slot)?.component)?.packageName
+
+    /** App icon for the drawer, loaded off the main thread. */
+    suspend fun icon(component: ComponentName, sizePx: Int): android.graphics.Bitmap? = withContext(Dispatchers.IO) {
+        runCatching { pm.getActivityIcon(component).toBitmap(sizePx, sizePx) }.getOrNull()
+    }
+
+    fun launchIntent(component: ComponentName): Intent =
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
 
     fun labelFor(component: ComponentName?): String? = component?.let {
         runCatching { pm.getActivityInfo(it, 0).loadLabel(pm).toString() }.getOrNull()

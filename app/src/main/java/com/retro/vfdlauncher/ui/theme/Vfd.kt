@@ -73,10 +73,10 @@ fun glow(
 )
 
 /** Recessed black-glass panel with the 1px teal inset border. */
-fun Modifier.vfdPanel(): Modifier = this
+fun Modifier.vfdPanel(border: Color = Vfd.PanelBorder): Modifier = this
     .clip(Vfd.PanelShape)
     .background(Vfd.Panel)
     .background(
         Brush.verticalGradient(0f to Color.Black.copy(alpha = 0.7f), 0.12f to Color.Transparent),
     )
-    .border(1.dp, Vfd.PanelBorder, Vfd.PanelShape)
+    .border(1.dp, border, Vfd.PanelShape)

@@ -35,6 +35,8 @@ data class Tuning(val band: Band, val value: Float) {
     }
 }
 
+data class CustomAction(val action: String, val name: String)
+
 data class QueueEntry(val id: Long, val title: String, val tuning: Tuning?)
 
 data class NowPlaying(
@@ -53,8 +55,34 @@ data class NowPlaying(
     val speed: Float,
     val durationMs: Long,
     val queue: List<QueueEntry>,
+    val activeQueueId: Long,
     val actions: Long,
+    val customActions: List<CustomAction>,
 ) {
+    /** "3/12" when the session publishes a queue that contains the current item. */
+    val queuePosition: String?
+        get() {
+            val i = queue.indexOfFirst { it.id == activeQueueId }
+            return if (i >= 0) "${i + 1}/${queue.size}" else null
+        }
+
+    /** Station name for radio (RDS PS or the app's title), without a bare frequency. */
+    val stationName: String?
+        get() = listOfNotNull(title, artist)
+            .map { it.trim() }
+            .firstOrNull { it.isNotEmpty() && !bareFrequency.matches(it) }
+            ?.uppercase(Locale.getDefault())
+
+    private companion object {
+        val bareFrequency = Regex("""(?i)^(fm|am)?\s*\d{2,4}([.,]\d{1,2})?\s*(mhz|khz)?$""")
+    }
+
+    /** First custom action whose id or label contains one of [words] (case-insensitive). */
+    fun findCustomAction(vararg words: String): CustomAction? = customActions.firstOrNull { a ->
+        val hay = (a.action + " " + a.name).lowercase(Locale.ROOT)
+        words.any { it in hay }
+    }
+
     /** The amber line under the big digits: RDS text for radio, "TITLE · ARTIST" for music. */
     val infoLine: String
         get() = listOfNotNull(title, artist)

@@ -11,7 +11,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.roundToInt
 
-data class Volume(val level: Int, val max: Int) {
+data class Volume(val level: Int, val max: Int, val muted: Boolean = false) {
     /** Position on the 20-segment bar. */
     val segments: Int get() = if (max <= 0) 0 else ((level.toFloat() / max) * SEGMENTS).roundToInt()
 
@@ -45,6 +45,7 @@ class VolumeRepository(context: Context) {
 
     fun up() = adjust(AudioManager.ADJUST_RAISE)
     fun down() = adjust(AudioManager.ADJUST_LOWER)
+    fun toggleMute() = adjust(AudioManager.ADJUST_TOGGLE_MUTE)
 
     private fun adjust(direction: Int) {
         // No FLAG_SHOW_UI: the VFD bar is the volume UI.
@@ -55,6 +56,7 @@ class VolumeRepository(context: Context) {
     private fun read() = Volume(
         level = audio.getStreamVolume(AudioManager.STREAM_MUSIC),
         max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC),
+        muted = audio.isStreamMute(AudioManager.STREAM_MUSIC),
     )
 
     fun audioManager(): AudioManager = audio

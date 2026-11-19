@@ -14,6 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items as gridItems
+import androidx.compose.foundation.Image
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.verticalScroll
@@ -100,7 +108,7 @@ fun AppPicker(
                         VfdButton(
                             Modifier
                                 .fillMaxWidth()
-                                .height(64.dp),
+                                .height(76.dp),
                             border = if (e.inLauncher) Vfd.Teal.copy(alpha = 0.3f) else Vfd.Amber.copy(alpha = 0.3f),
                             onClick = { onPick(e) },
                         ) {
@@ -117,7 +125,70 @@ fun AppPicker(
                                 )
                                 BasicText(
                                     e.component.flattenToShortString(),
-                                    style = glow(Vfd.Teal.copy(alpha = 0.5f), 13.sp, 1.sp, blur = 0f),
+                                    style = glow(Vfd.Teal.copy(alpha = 0.5f), 18.sp, 1.sp, blur = 0f),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** APPS button: every launcher app as a VFD tile grid. Tap opens, long-press does nothing yet. */
+@Composable
+fun AppDrawer(
+    entries: List<AppEntry>,
+    loadIcon: suspend (android.content.ComponentName) -> android.graphics.Bitmap?,
+    onOpen: (AppEntry) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Sheet(onDismiss) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                BasicText(
+                    "APPS",
+                    Modifier.weight(1f),
+                    style = glow(Vfd.Teal, 26.sp, 4.sp, blur = 8f, family = Vfd.Orbitron),
+                )
+                SheetButton("CLOSE", onClick = onDismiss)
+            }
+            if (entries.isEmpty()) {
+                BasicText("SCANNING…", style = glow(Vfd.Amber, 22.sp, 4.sp, blur = 6f))
+            } else {
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(6),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    gridItems(entries, key = { it.id }) { e ->
+                        val icon by produceState<android.graphics.Bitmap?>(null, e.component) {
+                            value = loadIcon(e.component)
+                        }
+                        VfdButton(
+                            Modifier
+                                .fillMaxWidth()
+                                .height(120.dp),
+                            border = Vfd.Teal.copy(alpha = 0.4f),
+                            onClickLabel = "Open ${e.label}",
+                            onClick = { onOpen(e) },
+                        ) {
+                            Column(
+                                Modifier.padding(horizontal = 6.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp),
+                            ) {
+                                Box(Modifier.size(48.dp)) {
+                                    icon?.let {
+                                        Image(it.asImageBitmap(), contentDescription = null, modifier = Modifier.size(48.dp))
+                                    }
+                                }
+                                BasicText(
+                                    e.label.uppercase(),
+                                    style = glow(Vfd.Teal, 18.sp, 1.sp, blur = 0f).copy(textAlign = TextAlign.Center),
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis,
                                 )
