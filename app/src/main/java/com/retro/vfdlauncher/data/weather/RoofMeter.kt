@@ -31,12 +31,16 @@ data class RoofInputs(
 
 enum class RoofTier { GOOD, OK, BAD }
 
+/** What animates around the car: rain (now or within the hour), sun (roof down, dry) or nothing. */
+enum class RoofFx { RAIN, SUN, NONE }
+
 data class RoofVerdict(
     val score: Int,
     val temp: Int,
     val verdict: String,
     val roofDown: Boolean,
     val tier: RoofTier,
+    val fx: RoofFx = if (roofDown) RoofFx.SUN else RoofFx.NONE,
 )
 
 /**
@@ -50,6 +54,11 @@ data class RoofVerdict(
  *
  * Roof drawn down from 5; 7+ is teal, 4-6 amber, under 4 red. The verdict looks up to 3 hours
  * ahead for the time rain starts (15-minute forecast).
+ *
+ * The middle case: warm (feels like 18 C+ now and next hour), only light rain (at most 0.5 mm per
+ * quarter hour now and in the next hour), no thunderstorm or downpour, gusts at most 50 km/h.
+ * In an MR2 at speed light rain flies over the cabin, so: roof down with rain, score capped at 5,
+ * "SPEED KEEPS YOU DRY".
  */
 object RoofMeter {
 
@@ -57,6 +66,12 @@ object RoofMeter {
 
     /** WMO codes that mean it is raining (drizzle, rain, showers, thunderstorm). */
     private fun isRainCode(code: Int) = code in 51..67 || code in 80..82 || code in 95..99
+
+    /** Heavy rain, freezing rain, violent showers or thunderstorms: never a top-down drive. */
+    private fun isHeavyCode(code: Int) = code in setOf(65, 66, 67, 82) || code in 95..99
+
+    /** At most this much rain per 15 minutes (about 2 mm/h) counts as light. */
+    private const val LIGHT_RAIN_MM = 0.5
 
     fun evaluate(i: RoofInputs, now: LocalDateTime): RoofVerdict {
         val hourStart = now.withMinute(0).withSecond(0).withNano(0)
@@ -72,12 +87,7 @@ object RoofMeter {
         val uv = (listOf(i.uvNow) + nextHour.map { it.uv }).max()
 
         var score = 10
-        score -= when {
-            rainChance >= 60 -> 6
-            rainChance >= 40 -> 3
-            rainChance >= 20 -> 1
-            else -> 0
-        }
+        score -= rainPenalty(rainChance)
         score -= when {
             coldest < 10 -> 6
             coldest < 14 -> 4
@@ -91,9 +101,28 @@ object RoofMeter {
             else -> 0
         }
         score = score.coerceIn(0, 10)
-        if (rainingNow) score = minOf(score, 1)
 
         val rainAt = rainStart(i, now)
+        val nextHourRain = i.quarters.filter { it.time.plusMinutes(15).isAfter(now) && it.time.isBefore(now.plusHours(1)) }
+        val wetSoon = rainingNow || (rainAt != null && rainAt.isBefore(now.plusHours(1)))
+        val lightOnly = i.precipitationNow <= LIGHT_RAIN_MM && nextHourRain.all { it.mm <= LIGHT_RAIN_MM }
+        val speedKeepsDry = wetSoon && lightOnly && coldest >= 18 && gusts <= 50 && !isHeavyCode(i.weatherCode)
+        if (speedKeepsDry) {
+            // Score as if dry (comfort only), then cap it in the amber middle with the roof down.
+            val dryScore = (score + rainPenalty(rainChance)).coerceIn(0, 10)
+            if (dryScore >= 5) {
+                return RoofVerdict(
+                    score = minOf(dryScore, 5),
+                    temp = i.temp.roundToInt(),
+                    verdict = "SPEED KEEPS YOU DRY",
+                    roofDown = true,
+                    tier = RoofTier.OK,
+                    fx = RoofFx.RAIN,
+                )
+            }
+        }
+        if (rainingNow) score = minOf(score, 1)
+
         val roofDown = score >= 5
         val verdict = when {
             rainingNow -> "ROOF UP · RAINING"
@@ -118,7 +147,19 @@ object RoofMeter {
                 score >= 4 -> RoofTier.OK
                 else -> RoofTier.BAD
             },
+            fx = when {
+                wetSoon -> RoofFx.RAIN
+                roofDown -> RoofFx.SUN
+                else -> RoofFx.NONE // roof up because it is cold or stormy, but dry
+            },
         )
+    }
+
+    private fun rainPenalty(chance: Int) = when {
+        chance >= 60 -> 6
+        chance >= 40 -> 3
+        chance >= 20 -> 1
+        else -> 0
     }
 
     /**

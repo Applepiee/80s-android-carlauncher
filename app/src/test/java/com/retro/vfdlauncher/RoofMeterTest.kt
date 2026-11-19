@@ -3,6 +3,7 @@ package com.retro.vfdlauncher
 import com.retro.vfdlauncher.data.weather.HourSample
 import com.retro.vfdlauncher.data.weather.RainSample
 import com.retro.vfdlauncher.data.weather.RoofInputs
+import com.retro.vfdlauncher.data.weather.RoofFx
 import com.retro.vfdlauncher.data.weather.RoofMeter
 import com.retro.vfdlauncher.data.weather.RoofTier
 import com.retro.vfdlauncher.data.weather.WeatherRepository
@@ -107,5 +108,43 @@ class RoofMeterTest {
         val json = """{"current":{"temperature_2m":10.2,"weather_code":3},"daily":{"time":["2026-11-19"],"weather_code":[61],"temperature_2m_max":[10.9]}}"""
         assertEquals(null, WeatherRepository.parse(json, 0L).roof)
         JSONObject(json) // well-formed
+    }
+
+    @Test
+    fun warmLightRainKeepsRoofDown() {
+        val v = RoofMeter.evaluate(
+            inputs(feels = 22.0, rainChance = 80, precipNow = 0.2, code = 61, rainFrom = now.withMinute(0)).let { i ->
+                i.copy(quarters = i.quarters.map { it.copy(mm = if (it.mm > 0) 0.2 else 0.0) })
+            },
+            now,
+        )
+        assertEquals(5, v.score)
+        assertTrue(v.roofDown)
+        assertEquals(RoofTier.OK, v.tier)
+        assertEquals(RoofFx.RAIN, v.fx)
+        assertEquals("SPEED KEEPS YOU DRY", v.verdict)
+    }
+
+    @Test
+    fun warmButPouringIsRoofUp() {
+        val v = RoofMeter.evaluate(inputs(feels = 22.0, rainChance = 90, precipNow = 1.5, code = 65, rainFrom = now.withMinute(0)), now)
+        assertEquals(1, v.score)
+        assertEquals("ROOF UP · RAINING", v.verdict)
+        assertEquals(RoofFx.RAIN, v.fx)
+    }
+
+    @Test
+    fun coldDrizzleIsRoofUp() {
+        val v = RoofMeter.evaluate(inputs(feels = 12.0, rainChance = 80, precipNow = 0.2, code = 51), now)
+        assertFalse(v.roofDown)
+        assertEquals("ROOF UP · RAINING", v.verdict)
+    }
+
+    @Test
+    fun coldButDryShowsNoRain() {
+        val v = RoofMeter.evaluate(inputs(feels = 6.0), now) // -6: roof up, dry
+        assertFalse(v.roofDown)
+        assertEquals(RoofFx.NONE, v.fx)
+        assertEquals("ROOF UP · TOO COLD", v.verdict)
     }
 }

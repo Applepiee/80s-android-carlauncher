@@ -73,6 +73,7 @@ import com.retro.vfdlauncher.data.media.Playlist
 import com.retro.vfdlauncher.data.media.PlaylistRepository
 import com.retro.vfdlauncher.data.media.Preset
 import com.retro.vfdlauncher.data.nav.NextTurn
+import com.retro.vfdlauncher.data.weather.RoofFx
 import com.retro.vfdlauncher.data.weather.RoofMeter
 import com.retro.vfdlauncher.data.weather.RoofTier
 import com.retro.vfdlauncher.data.weather.RoofVerdict
@@ -892,11 +893,12 @@ private fun WeatherOrRoofPanel(weather: Weather?, modifier: Modifier) {
 
 private val RoofRed = Color(0xFFFF6A4D)
 
-/** The three cases from the canvas, for the long-press demo. */
+/** The canvas cases plus the light-rain middle, for the long-press demo. */
 private val ROOF_DEMOS = listOf(
     RoofVerdict(9, 24, "GO TOPLESS!", roofDown = true, tier = RoofTier.GOOD),
     RoofVerdict(6, 14, "TOP DOWN, HEATER ON", roofDown = true, tier = RoofTier.OK),
-    RoofVerdict(2, 11, "ROOF UP · RAIN 17:40", roofDown = false, tier = RoofTier.BAD),
+    RoofVerdict(5, 22, "SPEED KEEPS YOU DRY", roofDown = true, tier = RoofTier.OK, fx = RoofFx.RAIN),
+    RoofVerdict(2, 11, "ROOF UP · RAIN 17:40", roofDown = false, tier = RoofTier.BAD, fx = RoofFx.RAIN),
 )
 
 @Composable
@@ -922,9 +924,9 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
             // Phosphor glow: blurred copies under the line art and the animated weather.
             val glowLayer = Modifier.fillMaxSize().blur(4.dp, BlurredEdgeTreatment.Unbounded)
             Image(car, null, glowLayer, alpha = 0.7f)
-            RoofWeatherFx(v.roofDown, clock, glowLayer)
+            RoofWeatherFx(v.fx, v.roofDown, clock, glowLayer)
             Image(car, null, Modifier.fillMaxSize())
-            RoofWeatherFx(v.roofDown, clock, Modifier.fillMaxSize())
+            RoofWeatherFx(v.fx, v.roofDown, clock, Modifier.fillMaxSize())
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             Row(

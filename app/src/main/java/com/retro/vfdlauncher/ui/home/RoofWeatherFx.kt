@@ -14,6 +14,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import com.retro.vfdlauncher.data.weather.RoofFx
 import com.retro.vfdlauncher.ui.theme.Vfd
 import kotlin.math.PI
 import kotlin.math.cos
@@ -38,25 +39,35 @@ fun rememberWeatherClock(): State<Float> =
  * car with turning rays and breeze streaks drift past the nose. Drawn in teal like the canvas.
  */
 @Composable
-fun RoofWeatherFx(roofDown: Boolean, clock: State<Float>, modifier: Modifier, color: Color = Vfd.Teal) {
+fun RoofWeatherFx(fx: RoofFx, roofDown: Boolean, clock: State<Float>, modifier: Modifier, color: Color = Vfd.Teal) {
     Canvas(modifier) {
         val t = clock.value
         val sx = size.width / 120f
         val sy = size.height / 40f
         fun p(x: Float, y: Float) = Offset(x * sx, y * sy)
         val w = 1.3f * sx
-        if (roofDown) drawSun(t, ::p, w, color) else drawRain(t, ::p, w, color)
+        when (fx) {
+            RoofFx.RAIN -> drawRain(t, ::p, w, color, if (roofDown) ROOF_DOWN_TOP else ROOF_UP_TOP)
+            RoofFx.SUN -> drawSun(t, ::p, w, color)
+            RoofFx.NONE -> Unit
+        }
     }
 }
 
 // ---------------------------------------------------------------- rain
 
-/** Top of the roof-up car (and the road beside it), in viewBox units, where a drop lands. */
-private fun landingY(x: Float): Float {
-    val pts = floatArrayOf(
-        3f, 26.5f, 7f, 22.4f, 15f, 18.7f, 34f, 15.7f, 55.6f, 5.7f, 66f, 4.4f, 74f, 4.4f,
-        83f, 7.6f, 92f, 12.5f, 109.5f, 15f, 116.6f, 22.2f,
-    )
+/** Outline tops (x, y pairs) where drops land: over the roof, or into the open cabin. */
+private val ROOF_UP_TOP = floatArrayOf(
+    3f, 26.5f, 7f, 22.4f, 15f, 18.7f, 34f, 15.7f, 55.6f, 5.7f, 66f, 4.4f, 74f, 4.4f,
+    83f, 7.6f, 92f, 12.5f, 109.5f, 15f, 116.6f, 22.2f,
+)
+private val ROOF_DOWN_TOP = floatArrayOf(
+    3f, 26.5f, 7f, 22.4f, 15f, 18.7f, 34f, 15.7f, 55f, 5.5f, 56.6f, 6.6f, 58f, 15.3f,
+    70.6f, 14.6f, 72.5f, 9f, 74f, 12.4f, 95f, 13f, 109.5f, 15f, 116.6f, 22.2f,
+)
+
+/** Top of the car (and the road beside it), in viewBox units, where a drop lands. */
+private fun landingY(x: Float, pts: FloatArray): Float {
     if (x < pts[0] || x > pts[pts.size - 2]) return 38f // road
     var i = 0
     while (i < pts.size - 2 && x > pts[i + 2]) i += 2
@@ -70,10 +81,10 @@ private val drops = List(11) { i ->
     Triple(x, 26f + (i * 13) % 11, (i * 0.37f) % 1f)
 }
 
-private fun DrawScope.drawRain(t: Float, p: (Float, Float) -> Offset, w: Float, color: Color) {
+private fun DrawScope.drawRain(t: Float, p: (Float, Float) -> Offset, w: Float, color: Color, top: FloatArray) {
     val len = 4f
     for ((x, speed, phase) in drops) {
-        val floor = landingY(x)
+        val floor = landingY(x, top)
         val travel = floor + len + 6f // from above the top edge to the landing point
         val cycle = travel / speed + 0.35f // fall, then a short splash
         val c = ((t / cycle + phase) % 1f) * cycle
