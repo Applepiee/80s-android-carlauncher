@@ -32,7 +32,8 @@ data class RoofInputs(
 enum class RoofTier { GOOD, OK, BAD }
 
 /** What animates around the car: rain (now or within the hour), sun (roof down, dry) or nothing. */
-enum class RoofFx { RAIN, SPEED_RAIN, SUN, NONE }
+/** BREEZE: roof down but cool (HEATER ON): airflow only, no sun. */
+enum class RoofFx { RAIN, SPEED_RAIN, SUN, BREEZE, NONE }
 
 data class RoofVerdict(
     val score: Int,
@@ -41,6 +42,8 @@ data class RoofVerdict(
     val roofDown: Boolean,
     val tier: RoofTier,
     val fx: RoofFx = if (roofDown) RoofFx.SUN else RoofFx.NONE,
+    /** Second line, alternated with [verdict] on the card: "RAIN FROM 17:40" / "RAIN ENDS 18:30". */
+    val detail: String? = null,
 )
 
 /**
@@ -107,6 +110,13 @@ object RoofMeter {
         val wetSoon = rainingNow || (rainAt != null && rainAt.isBefore(now.plusHours(1)))
         val lightOnly = i.precipitationNow <= LIGHT_RAIN_MM && nextHourRain.all { it.mm <= LIGHT_RAIN_MM }
         val speedKeepsDry = wetSoon && lightOnly && coldest >= 18 && gusts <= 50 && !isHeavyCode(i.weatherCode)
+        // When it is (about to be) wet: "RAIN FROM 17:40" before it starts, "RAIN ENDS 18:30" while it rains.
+        val wetNow = rainingNow || (rainAt != null && !rainAt.isAfter(now))
+        val rainTiming = when {
+            wetNow -> rainEnd(i, now)?.let { "RAIN ENDS ${it.format(clock)}" } ?: rainPast(i, now)
+            rainAt != null -> "RAIN FROM ${rainAt.format(clock)}"
+            else -> null
+        }
         if (speedKeepsDry) {
             // Score as if dry (comfort only), then cap it in the amber middle with the roof down.
             val dryScore = (score + rainPenalty(rainChance)).coerceIn(0, 10)
@@ -118,6 +128,7 @@ object RoofMeter {
                     roofDown = true,
                     tier = RoofTier.OK,
                     fx = RoofFx.SPEED_RAIN,
+                    detail = rainTiming,
                 )
             }
         }
@@ -149,10 +160,33 @@ object RoofMeter {
             },
             fx = when {
                 wetSoon -> RoofFx.RAIN
+                roofDown && coldest < 18 -> RoofFx.BREEZE // cool: the heater is on, no sun
                 roofDown -> RoofFx.SUN
                 else -> RoofFx.NONE // roof up because it is cold or stormy, but dry
             },
+            // The other verdicts already name the time; while it rains, say when it stops.
+            detail = if (rainingNow) rainTiming else null,
         )
+    }
+
+    /**
+     * When the rain stops, within 3 hours: the start of the first half hour (two 15-minute slots)
+     * below 0.1 mm. Null if it is still raining at the end of the forecast window.
+     */
+    fun rainEnd(i: RoofInputs, now: LocalDateTime): LocalDateTime? {
+        val until = now.plusHours(3)
+        val slots = i.quarters.filter { it.time.plusMinutes(15).isAfter(now) && it.time.isBefore(until) }
+        for (k in slots.indices) {
+            val dry = slots[k].mm < 0.1 && (k + 1 >= slots.size || slots[k + 1].mm < 0.1)
+            if (dry) return if (slots[k].time.isAfter(now)) slots[k].time else now
+        }
+        return null
+    }
+
+    /** "RAIN PAST 20:45": still raining at the end of the 15-minute forecast. */
+    private fun rainPast(i: RoofInputs, now: LocalDateTime): String? {
+        val last = i.quarters.lastOrNull { it.time.isBefore(now.plusHours(3)) } ?: return null
+        return "RAIN PAST ${last.time.plusMinutes(15).format(clock)}"
     }
 
     private fun rainPenalty(chance: Int) = when {

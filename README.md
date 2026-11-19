@@ -106,8 +106,8 @@ Every push builds a debug APK in GitHub Actions (**Actions › Build APK › lat
     release.
   - Updates only install over a build signed with the same key. A debug build from Android Studio has to be
     uninstalled once before the release builds can replace it.
-  - Publishing needs four repository secrets (**Settings › Secrets and variables › Actions**):
-    `SIGNING_KEYSTORE_B64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD` and `SIGNING_KEY_ALIAS`. The keystore
+  - Publishing needs three repository secrets (**Settings › Secrets and variables › Actions**):
+    `SIGNING_KEYSTORE_B64`, `SIGNING_PASSWORD` (used for both the keystore and the key) and `SIGNING_KEY_ALIAS`. The keystore
     itself is never committed. Without these secrets the workflow skips publishing.
 
 ## Build it yourself

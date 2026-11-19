@@ -26,9 +26,9 @@ android {
         if (keystoreFile != null) {
             create("release") {
                 storeFile = keystoreFile
-                storePassword = System.getenv("SIGNING_STORE_PASSWORD")
-                keyAlias = System.getenv("SIGNING_KEY_ALIAS") ?: "vfd"
-                keyPassword = System.getenv("SIGNING_KEY_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD")
+                storePassword = System.getenv("SIGNING_STORE_PASSWORD")?.trim()
+                keyAlias = System.getenv("SIGNING_KEY_ALIAS")?.trim()?.ifEmpty { null } ?: "vfd"
+                keyPassword = (System.getenv("SIGNING_KEY_PASSWORD") ?: System.getenv("SIGNING_STORE_PASSWORD"))?.trim()
             }
         }
     }

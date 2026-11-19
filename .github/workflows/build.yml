@@ -44,11 +44,12 @@ jobs:
         if: steps.secrets.outputs.publish == 'true'
         env:
           SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          # One password for store and key: SIGNING_PASSWORD, or the older separate names.
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_PASSWORD || secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_PASSWORD || secrets.SIGNING_KEY_PASSWORD || secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
         run: |
-          echo "$SIGNING_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "$SIGNING_KEYSTORE_B64" | tr -d " \r\n" | base64 -d > "$RUNNER_TEMP/release.jks"
           export SIGNING_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
           ./gradlew --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/vfd-launcher.apk"

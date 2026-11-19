@@ -55,6 +55,7 @@ class RoofMeterTest {
         val v = RoofMeter.evaluate(inputs(feels = 15.0), now) // -2
         assertEquals(8, v.score)
         assertEquals("TOP DOWN, HEATER ON", v.verdict)
+        assertEquals(RoofFx.BREEZE, v.fx) // cool: no sun
     }
 
     @Test
@@ -146,5 +147,40 @@ class RoofMeterTest {
         assertFalse(v.roofDown)
         assertEquals(RoofFx.NONE, v.fx)
         assertEquals("ROOF UP · TOO COLD", v.verdict)
+    }
+
+    @Test
+    fun speedDryBeforeRainSaysWhenItStarts() {
+        val base = inputs(feels = 22.0, rainChance = 70, rainFrom = now.withMinute(45))
+        val light = base.copy(quarters = base.quarters.map { it.copy(mm = if (it.mm > 0) 0.2 else 0.0) })
+        val v = RoofMeter.evaluate(light, now)
+        assertEquals("SPEED KEEPS YOU DRY", v.verdict)
+        assertEquals("RAIN FROM 14:45", v.detail)
+    }
+
+    @Test
+    fun speedDryWhileRainingSaysWhenItEnds() {
+        val base = inputs(feels = 22.0, rainChance = 70, precipNow = 0.2, code = 61)
+        // Light rain 14:00-15:15, dry from 15:30.
+        val q = base.quarters.map { it.copy(mm = if (it.time.isBefore(now.withMinute(0).plusMinutes(90))) 0.2 else 0.0) }
+        val v = RoofMeter.evaluate(base.copy(quarters = q), now)
+        assertEquals("SPEED KEEPS YOU DRY", v.verdict)
+        assertEquals("RAIN ENDS 15:30", v.detail)
+    }
+
+    @Test
+    fun roofUpRainingSaysWhenItEndsOrPast() {
+        val base = inputs(feels = 12.0, rainChance = 90, precipNow = 1.2, code = 63)
+        val ends = base.copy(quarters = base.quarters.map { it.copy(mm = if (it.time.isBefore(now.withMinute(0).plusMinutes(60))) 1.2 else 0.0) })
+        assertEquals("RAIN ENDS 15:00", RoofMeter.evaluate(ends, now).detail)
+        val allWet = base.copy(quarters = base.quarters.map { it.copy(mm = 1.2) })
+        val v = RoofMeter.evaluate(allWet, now)
+        assertEquals("ROOF UP · RAINING", v.verdict)
+        assertEquals("RAIN PAST 17:15", v.detail) // last 15-min slot 17:00 ends 17:15
+    }
+
+    @Test
+    fun dryVerdictsHaveNoSecondLine() {
+        assertEquals(null, RoofMeter.evaluate(inputs(), now).detail)
     }
 }
