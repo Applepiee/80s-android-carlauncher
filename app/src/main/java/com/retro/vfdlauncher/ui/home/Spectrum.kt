@@ -6,7 +6,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
@@ -50,10 +50,31 @@ private fun level(bar: Int, time: Float): Float {
 val LocalSpectrumLevels = staticCompositionLocalOf<State<FloatArray?>> { mutableStateOf(null) }
 
 /**
+ * Bar motion like a VFD level meter: a bar jumps up to a louder level at once, and falls under
+ * gentle gravity. When playback pauses the target is 0, so the bars sink slowly to empty
+ * (a full bar takes about 1.5 s) instead of freezing. Pure, so it is unit-tested.
+ */
+object BarPhysics {
+    /** Fall acceleration in bar-heights per second squared. */
+    const val GRAVITY = 0.9f
+
+    /** Advances one bar by [dt] seconds towards [target]; returns the new level, writes the new fall speed to [speed]. */
+    fun step(level: Float, speed: FloatArray, index: Int, target: Float, dt: Float): Float {
+        if (target >= level) {
+            speed[index] = 0f
+            return target
+        }
+        speed[index] += GRAVITY * dt
+        return maxOf(target, level - speed[index] * dt)
+    }
+}
+
+/**
  * Segmented analyser ([bars] columns of [segment]-tall segments every [period]). Shows the real
  * spectrum from [LocalSpectrumLevels] while [playing]; without it (no permission, no signal)
- * it falls back to the canvas animation, which freezes in place when paused.
- * Throttled to ~30 fps; only the draw phase re-runs per frame.
+ * the canvas animation. On pause the bars sink to empty instead of freezing.
+ * Throttled to ~30 fps and stops ticking once paused bars have settled; only the draw phase
+ * re-runs per frame.
  */
 @Composable
 fun SpectrumAnalyzer(
@@ -68,23 +89,39 @@ fun SpectrumAnalyzer(
     amberIndex: Int = 3,
 ) {
     val live = LocalSpectrumLevels.current
-    val time = remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(playing) {
-        if (!playing) return@LaunchedEffect
+    val shown = remember(bars) { FloatArray(bars) }
+    val speed = remember(bars) { FloatArray(bars) }
+    // Bumped once per animation step so the Canvas redraws; the levels live in [shown].
+    val frame = remember { mutableIntStateOf(0) }
+    LaunchedEffect(playing, bars) {
+        var time = 0f
         var last = withFrameNanos { it }
         var acc = 0L
         while (true) {
             val now = withFrameNanos { it }
             acc += now - last
             last = now
-            if (acc >= 33_000_000L) {
-                time.floatValue += acc / 1e9f
-                acc = 0L
+            if (acc < 33_000_000L) continue
+            val dt = (acc / 1e9f).coerceAtMost(0.1f)
+            acc = 0L
+            if (playing) time += dt
+            val real = if (playing) live.value?.takeIf { it.isNotEmpty() } else null
+            var settled = true
+            for (i in 0 until bars) {
+                val target = when {
+                    !playing -> 0f
+                    real != null -> real[i * real.size / bars]
+                    else -> level(i, time)
+                }
+                shown[i] = BarPhysics.step(shown[i], speed, i, target, dt)
+                if (shown[i] > 0f) settled = false
             }
+            frame.intValue++
+            if (!playing && settled) break // paused and empty: nothing left to animate
         }
     }
     Canvas(modifier) {
-        val t = time.floatValue
+        frame.intValue // redraw on every animation step
         val gapPx = gap.toPx()
         val barW = (size.width - gapPx * (bars - 1)) / bars
         val seg = segment.toPx()
@@ -94,9 +131,7 @@ fun SpectrumAnalyzer(
         for (i in 0 until bars) {
             val x = i * (barW + gapPx)
             val color = if (i % amberModulo == amberIndex) Vfd.Amber else Vfd.Teal
-            val real = if (playing) live.value else null
-            val lvl = if (real != null && real.isNotEmpty()) real[i * real.size / bars] else level(i, t)
-            val lit = (lvl * segments + 0.5f).toInt().coerceIn(0, segments)
+            val lit = (shown[i] * segments + 0.5f).toInt().coerceIn(0, segments)
             // Phosphor glow behind the lit run.
             if (lit > 0) {
                 val top = size.height - lit * periodPx + (periodPx - seg)
