@@ -85,6 +85,7 @@ class MainActivity : ComponentActivity() {
             val drawer by vm.drawer.collectAsStateWithLifecycle()
             val inspector by vm.inspector.collectAsStateWithLifecycle()
             val favorites by vm.favorites.collectAsStateWithLifecycle()
+            val update by vm.updateState.collectAsStateWithLifecycle()
             val playlists by vm.playlists.collectAsStateWithLifecycle()
             val currentPlaylist by vm.currentPlaylist.collectAsStateWithLifecycle()
             val playlistsOpen by vm.playlistsOpen.collectAsStateWithLifecycle()
@@ -157,6 +158,9 @@ class MainActivity : ComponentActivity() {
                             d != null -> AppDrawer(
                                 entries = d,
                                 favorites = favorites,
+                                update = update,
+                                currentVersion = vm.updater.currentVersion,
+                                onUpdate = { vm.onUpdateKey()?.let { safeStart(it) } },
                                 onToggleFavorite = { vm.toggleFavorite(it.component) },
                                 loadIcon = { vm.appRepo.icon(it, 96) },
                                 onOpen = {
@@ -195,6 +199,7 @@ class MainActivity : ComponentActivity() {
         hideSystemBars()
         vm.onResume()
         vm.spectrum.start()
+        vm.checkForUpdateQuietly()
         OverlayService.ensureRunning(this)
     }
 

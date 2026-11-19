@@ -97,10 +97,18 @@ Every push builds a debug APK in GitHub Actions (**Actions › Build APK › lat
 
 - **USB stick:** copy the APK to a stick and open it with the unit's file manager. Allow installing from unknown
   sources, then choose VFD Launcher as the Home app (**Settings › Apps › Default apps › Home app**).
-- **Over the air (coming soon):** each build will also be published on this repo's **Releases** page. An
-  **UPDATE** button in the launcher will download the newest version over Wi-Fi or mobile data and open Android's
-  installer. Android always asks you to confirm an update once. Updates only install over each other when they're
-  signed with the same key, so use the release builds on the unit.
+- **Over the air (no USB):** every push publishes a release APK, signed with a fixed release key, on this
+  repo's [Releases](https://github.com/Applepiee/80s-android-carlauncher/releases) page as version
+  0.1.*run number*. In the launcher, **APPS › UPDATE** downloads the newest version over Wi-Fi or mobile data and
+  opens Android's installer; confirm with **Update**. The launcher also checks quietly every 6 hours. The first
+  time, Android asks you to allow "install unknown apps" for VFD Launcher.
+  - First install: open the Releases page in the unit's browser and install `vfd-launcher.apk` from the latest
+    release.
+  - Updates only install over a build signed with the same key. A debug build from Android Studio has to be
+    uninstalled once before the release builds can replace it.
+  - Publishing needs four repository secrets (**Settings › Secrets and variables › Actions**):
+    `SIGNING_KEYSTORE_B64`, `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD` and `SIGNING_KEY_ALIAS`. The keystore
+    itself is never committed. Without these secrets the workflow skips publishing.
 
 ## Build it yourself
 

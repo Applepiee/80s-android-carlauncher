@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.retro.vfdlauncher.data.apps.AppEntry
 import com.retro.vfdlauncher.data.apps.Slot
+import com.retro.vfdlauncher.data.update.UpdateState
 import com.retro.vfdlauncher.ui.home.VfdButton
 import com.retro.vfdlauncher.ui.picker.OverlayDefaults.Scrim
 import com.retro.vfdlauncher.ui.theme.Vfd
@@ -150,6 +151,9 @@ fun AppDrawer(
     entries: List<AppEntry>,
     favorites: List<android.content.ComponentName>,
     onToggleFavorite: (AppEntry) -> Unit,
+    update: UpdateState = UpdateState.Idle,
+    currentVersion: String = "",
+    onUpdate: () -> Unit = {},
     loadIcon: suspend (android.content.ComponentName) -> android.graphics.Bitmap?,
     onOpen: (AppEntry) -> Unit,
     onDismiss: () -> Unit,
@@ -162,7 +166,11 @@ fun AppDrawer(
                     Modifier.weight(1f),
                     style = glow(Vfd.Teal, 26.sp, 4.sp, blur = 8f, family = Vfd.Orbitron),
                 )
-                SheetButton("CLOSE", onClick = onDismiss)
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                    val (label, hot) = updateLabel(update, currentVersion)
+                    SheetButton(label, if (hot) Vfd.Amber else Vfd.Teal, onUpdate)
+                    SheetButton("CLOSE", onClick = onDismiss)
+                }
             }
             if (entries.isEmpty()) {
                 BasicText("SCANNING…", style = glow(Vfd.Amber, 22.sp, 4.sp, blur = 6f))
@@ -209,6 +217,18 @@ fun AppDrawer(
             }
         }
     }
+}
+
+/** Text of the drawer's UPDATE key, and whether it should stand out (amber). */
+private fun updateLabel(st: UpdateState, current: String): Pair<String, Boolean> = when (st) {
+    UpdateState.Idle -> "UPDATE · v$current" to false
+    UpdateState.Checking -> "CHECKING…" to false
+    is UpdateState.UpToDate -> "UP TO DATE · v${st.versionName}" to false
+    is UpdateState.Available -> "INSTALL v${st.release.versionName}" to true
+    is UpdateState.Downloading -> "DOWNLOADING ${st.percent}%" to true
+    UpdateState.Installing -> "INSTALLING…" to true
+    UpdateState.NeedsPermission -> "ALLOW INSTALLS, THEN TAP" to true
+    is UpdateState.Failed -> (st.reason.ifEmpty { "UPDATE · v$current" }) to st.reason.isNotEmpty()
 }
 
 @Composable

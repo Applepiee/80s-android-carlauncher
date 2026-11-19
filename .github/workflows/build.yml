@@ -9,6 +9,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write   # publish the OTA release on this repo
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -22,3 +24,41 @@ jobs:
         with:
           name: vfd-launcher-debug
           path: app/build/outputs/apk/debug/*.apk
+
+      # ---- Over-the-air release for the head unit -------------------------------------------
+      # Signed with the fixed release key and published on this (public) repo's Releases page.
+      # The launcher's UPDATE key downloads from there. Skipped until the signing secrets
+      # exist, and for pull requests.
+      - name: Check release secrets
+        id: secrets
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        env:
+          HAS_KEY: ${{ secrets.SIGNING_KEYSTORE_B64 != '' }}
+        run: |
+          if [ "$HAS_KEY" = "true" ]; then
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Release secrets not set: skipping the OTA release."
+          fi
+      - name: Build signed release APK
+        if: steps.secrets.outputs.publish == 'true'
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+        run: |
+          echo "$SIGNING_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          export SIGNING_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
+          ./gradlew --no-daemon assembleRelease
+          cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/vfd-launcher.apk"
+          rm -f "$RUNNER_TEMP/release.jks"
+      - name: Publish the release
+        if: steps.secrets.outputs.publish == 'true'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v0.1.${{ github.run_number }}
+          name: VFD Launcher 0.1.${{ github.run_number }}
+          body: Over-the-air build of the VFD Launcher. Install from the launcher (APPS > UPDATE) or download the APK below.
+          files: ${{ runner.temp }}/vfd-launcher.apk
+          make_latest: true
