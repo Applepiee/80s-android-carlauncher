@@ -1,0 +1,4 @@
+<resources>
+    <string name="app_name">VFD Launcher</string>
+    <string name="media_listener_label">VFD Launcher now playing</string>
+</resources>
