@@ -128,11 +128,11 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) wm.currentWindowMetrics.bounds
         else Rect(0, 0, resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)
 
-    /** Navigation bar / cutout on the left edge (landscape), so the rail is not drawn under it. */
+    /** Navigation bar on the left edge (landscape), so the rail is not drawn under it. The system already keeps the window out of a camera cutout. */
     private fun leftInset(): Int =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             wm.currentWindowMetrics.windowInsets
-                .getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars() or WindowInsets.Type.displayCutout())
+                .getInsetsIgnoringVisibility(WindowInsets.Type.navigationBars())
                 .left
         } else 0
 

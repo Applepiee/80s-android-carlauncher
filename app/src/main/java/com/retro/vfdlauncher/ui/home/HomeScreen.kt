@@ -584,7 +584,7 @@ private fun MusicToggleRow(state: HomeState, actions: HomeActions, modifier: Mod
             onLongClick = { actions.onPlaylistEdit(state.currentPlaylist.coerceAtLeast(0)) },
             onClick = actions.onPlaylists,
         )
-        RowKey("OPEN APP", VfdIcons.OpenApp, Vfd.Amber, key, halo = true, onClick = actions.onOpenMusicApp)
+        RowKey("OPEN APP", VfdIcons.OpenApp, Vfd.Amber, key, halo = !state.playlistsOpen, onClick = actions.onOpenMusicApp)
     }
 }
 
