@@ -923,8 +923,7 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
     ) {
         val car = rememberVectorPainter(if (v.roofDown) Mr2Icon.RoofDown else Mr2Icon.RoofUp)
         val clock = rememberWeatherClock()
-        // Slightly smaller than the canvas' 104 px so "TOP-DOWN SCORE 10/10" and "24°" share a line.
-        Box(Modifier.size(93.dp, 31.dp)) {
+        Box(Modifier.size(104.dp, 35.dp)) {
             // Phosphor glow: blurred copies under the line art and the animated weather.
             val glowLayer = Modifier.fillMaxSize().blur(4.dp, BlurredEdgeTreatment.Unbounded)
             Image(car, null, glowLayer, alpha = 0.7f)
@@ -933,15 +932,16 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
             RoofWeatherFx(v.fx, v.roofDown, clock, Modifier.fillMaxSize())
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
+            // Title on its own line; the score sits at the end of its bar, like a meter reading.
             Row(
                 Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom,
             ) {
                 BasicText(
-                    "TOP-DOWN SCORE ${v.score}/10",
+                    "TOP-DOWN SCORE",
                     Modifier.weight(1f, fill = false),
-                    style = glow(Vfd.Teal, 18.sp, 1.sp, blur = 4f),
+                    style = glow(Vfd.Teal.copy(alpha = 0.75f), 18.sp, 1.sp, blur = 4f),
                     maxLines = 1,
                     softWrap = false,
                 )
@@ -953,7 +953,17 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
                     softWrap = false,
                 )
             }
-            SegmentBar(total = 10, lit = v.score, height = 14.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) { color }
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Box(Modifier.weight(1f)) {
+                    SegmentBar(total = 10, lit = v.score, height = 14.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) { color }
+                }
+                BasicText(
+                    "${v.score}/10",
+                    style = glow(color, 20.sp, blur = 6f).copy(lineHeight = 1.em),
+                    maxLines = 1,
+                    softWrap = false,
+                )
+            }
             // With a second line ("RAIN ENDS 18:30") the line alternates every 3 s, like a VFD
             // cycling its text.
             var showDetail by remember(v.verdict, v.detail) { mutableStateOf(false) }
