@@ -58,7 +58,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v0.1.${{ github.run_number }}
-          name: VFD Launcher 0.1.${{ github.run_number }}
-          body: Over-the-air build of the VFD Launcher. Install from the launcher (APPS > UPDATE) or download the APK below.
+          name: Roadster Launcher 0.1.${{ github.run_number }}
+          body: Over-the-air build of Roadster Launcher. Install from the launcher (APPS > UPDATE) or download the APK below.
           files: ${{ runner.temp }}/vfd-launcher.apk
           make_latest: true

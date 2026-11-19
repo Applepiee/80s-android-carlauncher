@@ -1,6 +1,6 @@
-# VFD Hi-Fi car launcher
+# Roadster Launcher
 
-An Android home-screen app for car head units that looks like the glowing vacuum-fluorescent display (VFD) of an
+A retro "VFD hi-fi" Android home-screen app for car head units that looks like the glowing vacuum-fluorescent display (VFD) of an
 80s hi-fi tuner: teal and amber segments, scanlines, a spectrum analyser and chunky hardware-style keys.
 
 It's built for an **ATOTO S8L** head unit (Android 15, 1280×720 landscape) in a **2003 Toyota MR2 Roadster**, and
@@ -96,12 +96,12 @@ On first launch, tap the big display ("TAP TO ALLOW MEDIA ACCESS") to grant noti
 Every push builds a debug APK in GitHub Actions (**Actions › Build APK › latest run › Artifacts**).
 
 - **USB stick:** copy the APK to a stick and open it with the unit's file manager. Allow installing from unknown
-  sources, then choose VFD Launcher as the Home app (**Settings › Apps › Default apps › Home app**).
+  sources, then choose Roadster Launcher as the Home app (**Settings › Apps › Default apps › Home app**).
 - **Over the air (no USB):** every push publishes a release APK, signed with a fixed release key, on this
   repo's [Releases](https://github.com/Applepiee/80s-android-carlauncher/releases) page as version
   0.1.*run number*. In the launcher, **APPS › UPDATE** downloads the newest version over Wi-Fi or mobile data and
   opens Android's installer; confirm with **Update**. The launcher also checks quietly every 6 hours. The first
-  time, Android asks you to allow "install unknown apps" for VFD Launcher.
+  time, Android asks you to allow "install unknown apps" for Roadster Launcher.
   - First install: open the Releases page in the unit's browser and install `vfd-launcher.apk` from the latest
     release.
   - Updates only install over a build signed with the same key. A debug build from Android Studio has to be
@@ -119,7 +119,7 @@ Every push builds a debug APK in GitHub Actions (**Actions › Build APK › lat
    - **Phone or tablet:** the Android Emulator doesn't run on ARM Windows PCs. On those, use a phone over USB and
      make it behave like the head unit with `adb shell wm size 1280x720` and `adb shell wm density 160`. Undo this
      with `wm size reset` and `wm density reset`.
-3. Press Home and choose **VFD Launcher › Always**.
+3. Press Home and choose **Roadster Launcher › Always**.
 
 From the command line, `./gradlew assembleDebug testDebugUnitTest` builds
 `app/build/outputs/apk/debug/app-debug.apk` and runs the unit tests.
