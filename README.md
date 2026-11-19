@@ -1,6 +1,6 @@
 # Roadster Launcher
 
-A retro "VFD hi-fi" Android home-screen app for car head units that looks like the glowing vacuum-fluorescent display (VFD) of an
+An Android home-screen app for car head units that looks like the glowing vacuum-fluorescent display (VFD) of an
 80s hi-fi tuner: teal and amber segments, scanlines, a spectrum analyser and chunky hardware-style keys.
 
 It's built for an **ATOTO S8L** head unit (Android 15, 1280×720 landscape) in a **2003 Toyota MR2 Roadster**, and
