@@ -115,15 +115,19 @@ private fun DrawScope.drawSun(t: Float, p: (Float, Float) -> Offset, w: Float, c
         val sa = sin(a)
         drawLine(c, p(cx + ca * (r + 1.4f), cy + sa * (r + 1.4f)), p(cx + ca * (r + 3f), cy + sa * (r + 3f)), w, StrokeCap.Round)
     }
-    // Breeze: dashed streaks drifting left past the nose, two rows at different speeds.
-    for ((row, y, speed) in listOf(Triple(0, 10f, 9f), Triple(1, 14f, 6.5f), Triple(2, 18f, 11f))) {
-        val span = 40f
-        for (d in 0 until 3) {
-            val start = ((t * speed + d * span / 3f + row * 7f) % span)
-            val x0 = 26f - start // from just ahead of the windscreen out past the left edge
-            val x1 = x0 - 3f
-            val a = (1f - start / span).coerceIn(0f, 1f) * 0.8f
-            if (x1 > -4f) drawLine(color.copy(alpha = a), p(x0, y), p(x1, y), w * 0.85f, StrokeCap.Round)
+    // Airflow: the car drives to the left, so wind streams from ahead of the nose back over the
+    // bonnet and cabin to the tail (left to right). Long streaks, three rows at different speeds,
+    // fading in and out so they never pop.
+    data class Row(val y: Float, val speed: Float, val length: Float, val offset: Float)
+    val rows = listOf(Row(4.5f, 30f, 18f, 0f), Row(9f, 24f, 22f, 47f), Row(13.5f, 34f, 15f, 91f))
+    val span = 150f // from x = -20 to 130: fully across the card
+    for (r in rows) {
+        for (d in 0 until 2) {
+            val progress = ((t * r.speed + r.offset + d * span / 2f) % span) / span
+            val head = -20f + progress * span
+            val tail = head - r.length
+            val a = sin(PI.toFloat() * progress) * 0.75f
+            drawLine(color.copy(alpha = a), p(tail, r.y), p(head, r.y), w * 0.85f, StrokeCap.Round)
         }
     }
 }
