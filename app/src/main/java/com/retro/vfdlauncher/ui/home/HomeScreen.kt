@@ -897,7 +897,7 @@ private val RoofRed = Color(0xFFFF6A4D)
 private val ROOF_DEMOS = listOf(
     RoofVerdict(9, 24, "GO TOPLESS!", roofDown = true, tier = RoofTier.GOOD),
     RoofVerdict(6, 14, "TOP DOWN, HEATER ON", roofDown = true, tier = RoofTier.OK),
-    RoofVerdict(5, 22, "SPEED KEEPS YOU DRY", roofDown = true, tier = RoofTier.OK, fx = RoofFx.SPEED_RAIN),
+    RoofVerdict(5, 22, "SPEED KEEPS YOU DRY", roofDown = true, tier = RoofTier.OK, fx = RoofFx.SPEED_RAIN, detail = "RAIN ENDS 18:30"),
     RoofVerdict(2, 11, "ROOF UP · RAIN 17:40", roofDown = false, tier = RoofTier.BAD, fx = RoofFx.RAIN),
 )
 
@@ -951,8 +951,17 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
                 )
             }
             SegmentBar(total = 10, lit = v.score, height = 14.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) { color }
+            // With a second line ("RAIN ENDS 18:30") the line alternates every 3 s, like a VFD
+            // cycling its text.
+            var showDetail by remember(v.verdict, v.detail) { mutableStateOf(false) }
+            LaunchedEffect(v.verdict, v.detail) {
+                while (v.detail != null) {
+                    delay(3_000)
+                    showDetail = !showDetail
+                }
+            }
             BasicText(
-                v.verdict,
+                if (showDetail && v.detail != null) v.detail else v.verdict,
                 style = glow(Vfd.Amber, 18.sp, 1.sp, blur = 6f),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
