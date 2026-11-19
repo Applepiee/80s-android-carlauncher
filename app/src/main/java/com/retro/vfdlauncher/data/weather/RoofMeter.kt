@@ -32,7 +32,8 @@ data class RoofInputs(
 enum class RoofTier { GOOD, OK, BAD }
 
 /** What animates around the car: rain (now or within the hour), sun (roof down, dry) or nothing. */
-enum class RoofFx { RAIN, SPEED_RAIN, SUN, NONE }
+/** BREEZE: roof down but cool (HEATER ON): airflow only, no sun. */
+enum class RoofFx { RAIN, SPEED_RAIN, SUN, BREEZE, NONE }
 
 data class RoofVerdict(
     val score: Int,
@@ -159,6 +160,7 @@ object RoofMeter {
             },
             fx = when {
                 wetSoon -> RoofFx.RAIN
+                roofDown && coldest < 18 -> RoofFx.BREEZE // cool: the heater is on, no sun
                 roofDown -> RoofFx.SUN
                 else -> RoofFx.NONE // roof up because it is cold or stormy, but dry
             },

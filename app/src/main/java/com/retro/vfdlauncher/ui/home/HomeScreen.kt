@@ -899,7 +899,7 @@ private val RoofRed = Color(0xFFFF6A4D)
 /** The canvas cases plus the light-rain middle, for the long-press demo. */
 private val ROOF_DEMOS = listOf(
     RoofVerdict(9, 24, "GO TOPLESS!", roofDown = true, tier = RoofTier.GOOD),
-    RoofVerdict(6, 14, "TOP DOWN, HEATER ON", roofDown = true, tier = RoofTier.OK),
+    RoofVerdict(6, 14, "TOP DOWN, HEATER ON", roofDown = true, tier = RoofTier.OK, fx = RoofFx.BREEZE),
     RoofVerdict(5, 22, "SPEED KEEPS YOU DRY", roofDown = true, tier = RoofTier.OK, fx = RoofFx.SPEED_RAIN, detail = "RAIN ENDS 18:30"),
     RoofVerdict(2, 11, "ROOF UP · RAIN 17:40", roofDown = false, tier = RoofTier.BAD, fx = RoofFx.RAIN),
 )

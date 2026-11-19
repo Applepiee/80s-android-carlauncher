@@ -55,6 +55,7 @@ class RoofMeterTest {
         val v = RoofMeter.evaluate(inputs(feels = 15.0), now) // -2
         assertEquals(8, v.score)
         assertEquals("TOP DOWN, HEATER ON", v.verdict)
+        assertEquals(RoofFx.BREEZE, v.fx) // cool: no sun
     }
 
     @Test

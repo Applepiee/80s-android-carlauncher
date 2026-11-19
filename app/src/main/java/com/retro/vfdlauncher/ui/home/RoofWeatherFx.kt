@@ -49,7 +49,11 @@ fun RoofWeatherFx(fx: RoofFx, roofDown: Boolean, clock: State<Float>, modifier: 
         when (fx) {
             RoofFx.RAIN -> drawRain(t, ::p, w, color, if (roofDown) ROOF_DOWN_TOP else ROOF_UP_TOP)
             RoofFx.SPEED_RAIN -> drawSpeedRain(t, ::p, w, color)
-            RoofFx.SUN -> drawSun(t, ::p, w, color)
+            RoofFx.SUN -> {
+                drawSun(t, ::p, w, color)
+                drawBreeze(t, ::p, w, color)
+            }
+            RoofFx.BREEZE -> drawBreeze(t, ::p, w, color)
             RoofFx.NONE -> Unit
         }
     }
@@ -209,6 +213,9 @@ private fun DrawScope.drawSun(t: Float, p: (Float, Float) -> Offset, w: Float, c
         val sa = sin(a)
         drawLine(c, p(cx + ca * (r + 1.4f), cy + sa * (r + 1.4f)), p(cx + ca * (r + 3f), cy + sa * (r + 3f)), w, StrokeCap.Round)
     }
+}
+
+private fun DrawScope.drawBreeze(t: Float, p: (Float, Float) -> Offset, w: Float, color: Color) {
     // Airflow: the car drives to the left, so wind streams from ahead of the nose back over the
     // bonnet and cabin to the tail (left to right). Long streaks, three rows at different speeds,
     // fading in and out so they never pop.
