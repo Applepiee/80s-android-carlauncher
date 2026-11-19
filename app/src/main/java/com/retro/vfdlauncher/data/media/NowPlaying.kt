@@ -61,11 +61,27 @@ data class NowPlaying(
     /** MediaController.getQueueTitle(): the playlist/album name, when the app publishes one. */
     val queueTitle: String? = null,
 ) {
-    /** "3/12" when the session publishes a queue that contains the current item. */
+    /**
+     * YouTube Music (and apps whose queue is titled "Up next") publish only a sliding window of
+     * the next ~10 songs, not the whole playlist, so a position in it would be wrong.
+     */
+    val queueIsWindow: Boolean
+        get() = "youtube" in packageName ||
+            queueTitle?.trim()?.lowercase(Locale.ROOT) in setOf("up next", "playing next", "volgende", "als volgende")
+
+    /** "3/12" when the session publishes a complete queue that contains the current item. */
     val queuePosition: String?
         get() {
+            if (queueIsWindow) return null
             val i = queue.indexOfFirst { it.id == activeQueueId }
             return if (i >= 0) "${i + 1}/${queue.size}" else null
+        }
+
+    /** Title of the song after the current one in the published queue, if any. */
+    val nextTitle: String?
+        get() {
+            val i = queue.indexOfFirst { it.id == activeQueueId }
+            return queue.getOrNull(i + 1)?.title?.takeIf { i >= 0 && it.isNotBlank() }
         }
 
     /** Station name for radio (RDS PS or the app's title), without a bare frequency. */

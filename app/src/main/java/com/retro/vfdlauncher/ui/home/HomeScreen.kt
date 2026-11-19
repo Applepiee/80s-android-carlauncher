@@ -383,7 +383,10 @@ private fun MusicDisplay(state: HomeState, actions: HomeActions) {
     val picked = state.playlists.getOrNull(state.currentPlaylist)?.name?.takeIf { it.isNotBlank() }
     val queueName = np?.queueTitle?.takeUnless { it.trim().lowercase(Locale.ROOT) in GENERIC_QUEUE_TITLES }
     val source = (queueName ?: picked ?: np?.appLabel ?: "YT MUSIC").uppercase(Locale.getDefault())
-    val header = np?.queuePosition?.let { "$source · TRACK $it" } ?: source
+    // Complete queues: "TRACK 3/12". YouTube Music only shares the next ~10 songs, so name the next one instead.
+    val header = np?.queuePosition?.let { "$source · TRACK $it" }
+        ?: np?.nextTitle?.let { "$source · NEXT: ${it.uppercase(Locale.getDefault())}" }
+        ?: source
     val title = when {
         !state.hasMediaAccess -> "TAP TO ALLOW"
         else -> np?.title?.uppercase(Locale.getDefault()) ?: "— — —"
@@ -394,7 +397,7 @@ private fun MusicDisplay(state: HomeState, actions: HomeActions) {
     }
 
     Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
             BasicText(
                 header, Modifier.weight(1f),
                 style = glow(Vfd.Teal, 22.sp, 4.sp, blur = 6f), maxLines = 1, overflow = TextOverflow.Ellipsis,
