@@ -48,7 +48,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
         run: |
-          echo "$SIGNING_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "$SIGNING_KEYSTORE_B64" | tr -d " \r\n" | base64 -d > "$RUNNER_TEMP/release.jks"
           export SIGNING_KEYSTORE_FILE="$RUNNER_TEMP/release.jks"
           ./gradlew --no-daemon assembleRelease
           cp app/build/outputs/apk/release/app-release.apk "$RUNNER_TEMP/vfd-launcher.apk"
