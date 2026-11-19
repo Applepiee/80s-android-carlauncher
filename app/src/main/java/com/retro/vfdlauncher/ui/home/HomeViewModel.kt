@@ -13,6 +13,8 @@ import com.retro.vfdlauncher.data.audio.AudioSpectrum
 import com.retro.vfdlauncher.data.audio.VolumeRepository
 import com.retro.vfdlauncher.data.media.MediaRepository
 import com.retro.vfdlauncher.data.media.NowPlaying
+import com.retro.vfdlauncher.data.media.Playlist
+import com.retro.vfdlauncher.data.media.PlaylistRepository
 import com.retro.vfdlauncher.data.media.PresetRepository
 import com.retro.vfdlauncher.data.nav.NavigationState
 import com.retro.vfdlauncher.data.weather.WeatherRepository
@@ -40,6 +42,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private val weatherRepo = WeatherRepository(app)
     private val mediaRepo = MediaRepository(app, viewModelScope, volumeRepo)
     private val presetRepo = PresetRepository(app)
+    private val playlistRepo = PlaylistRepository(app)
     val appRepo = AppRepository(app)
     /** Real spectrum for the analysers; started/stopped with the activity. */
     val spectrum = AudioSpectrum(app)
@@ -49,6 +52,15 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val volume = volumeRepo.volume
     val hasMediaAccess = mediaRepo.hasAccess
     val presets = presetRepo.presets
+    val playlists = playlistRepo.playlists
+    val currentPlaylist = playlistRepo.current
+
+    private val _playlistsOpen = MutableStateFlow(false)
+    val playlistsOpen: StateFlow<Boolean> = _playlistsOpen.asStateFlow()
+
+    /** Playlist key being edited, or null. */
+    private val _playlistEditor = MutableStateFlow<Int?>(null)
+    val playlistEditor: StateFlow<Int?> = _playlistEditor.asStateFlow()
     val nextTurn = NavigationState.nextTurn
 
     private val _source = MutableStateFlow(
@@ -218,6 +230,37 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         val action = np.findCustomAction("thumbs_up", "thumb_up", "thumbs up", "like", "favorite", "heart") ?: return
         mediaRepo.sendCustomAction(np.packageName, action.action)
         _toggles.value = _toggles.value.copy(liked = !_toggles.value.liked)
+    }
+
+    // ---- Playlists ----
+    fun openPlaylists() {
+        _playlistsOpen.value = true
+    }
+
+    fun closePlaylists() {
+        _playlistsOpen.value = false
+    }
+
+    fun editPlaylist(index: Int) {
+        _playlistEditor.value = index
+    }
+
+    fun closePlaylistEditor() {
+        _playlistEditor.value = null
+    }
+
+    fun savePlaylist(index: Int, p: Playlist?) {
+        playlistRepo.set(index, p)
+        _playlistEditor.value = null
+    }
+
+    /** The playlist to start for a key (and remembers it as playing), or null for an empty key. */
+    fun startPlaylist(index: Int): Playlist? {
+        val p = playlists.value.getOrNull(index) ?: return null
+        playlistRepo.markPlaying(index)
+        _playlistsOpen.value = false
+        setSource(Source.MUSIC)
+        return p
     }
 
     // ---- Inspector ----

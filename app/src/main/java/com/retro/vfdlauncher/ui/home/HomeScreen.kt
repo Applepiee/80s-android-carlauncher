@@ -6,6 +6,8 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +37,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.asImageBitmap
@@ -54,6 +60,8 @@ import com.retro.vfdlauncher.data.apps.Slot
 import com.retro.vfdlauncher.data.audio.Volume
 import com.retro.vfdlauncher.data.media.Band
 import com.retro.vfdlauncher.data.media.NowPlaying
+import com.retro.vfdlauncher.data.media.Playlist
+import com.retro.vfdlauncher.data.media.PlaylistRepository
 import com.retro.vfdlauncher.data.media.Preset
 import com.retro.vfdlauncher.data.nav.NextTurn
 import com.retro.vfdlauncher.data.weather.Weather
@@ -78,6 +86,11 @@ data class HomeState(
     val volume: Volume,
     val presets: List<Preset?>,
     val toggles: MusicToggles,
+    /** The six PLAYLISTS keys (null = empty slot). */
+    val playlists: List<Playlist?> = List(PlaylistRepository.COUNT) { null },
+    /** Index of the playlist last started from the launcher, or -1. */
+    val currentPlaylist: Int = -1,
+    val playlistsOpen: Boolean = false,
 )
 
 /** Everything the home screen can do. */
@@ -102,6 +115,13 @@ class HomeActions(
     val onVolumeDown: () -> Unit,
     val onGrantMediaAccess: () -> Unit,
     val onInspect: () -> Unit,
+    val onPlaylists: () -> Unit = {},
+    val onPlaylistsClose: () -> Unit = {},
+    /** Tap a playlist key: play it (empty key: set it up). */
+    val onPlaylist: (Int) -> Unit = {},
+    /** Long-press a playlist key (or PLAYLISTS): edit that slot. */
+    val onPlaylistEdit: (Int) -> Unit = {},
+    val onOpenMusicApp: () -> Unit = {},
 )
 
 const val DESIGN_W = 1280f
@@ -151,6 +171,9 @@ fun HomeScreen(state: HomeState, actions: HomeActions) {
             } else {
                 MusicTransport(state, actions, Modifier.offset(40.dp, 428.dp).size(780.dp, 156.dp))
                 MusicToggleRow(state, actions, Modifier.offset(40.dp, 604.dp).size(780.dp, 84.dp))
+                if (state.playlistsOpen) {
+                    PlaylistsPanel(state, actions, Modifier.offset(40.dp, 108.dp).size(780.dp, 580.dp))
+                }
             }
             val turn = state.nextTurn
             if (turn != null) {
@@ -325,7 +348,9 @@ private fun MusicDisplay(state: HomeState) {
     }.coerceIn(0L, np?.durationMs?.takeIf { it > 0 } ?: Long.MAX_VALUE)
     val duration = np?.durationMs ?: 0L
 
-    val source = (np?.appLabel ?: "YT MUSIC").uppercase(Locale.getDefault())
+    // "{playlist} · TRACK x/y": the app's queue title, else the playlist last picked here, else the app.
+    val picked = state.playlists.getOrNull(state.currentPlaylist)?.name?.takeIf { it.isNotBlank() }
+    val source = (np?.queueTitle ?: picked ?: np?.appLabel ?: "YT MUSIC").uppercase(Locale.getDefault())
     val header = np?.queuePosition?.let { "$source · TRACK $it" } ?: source
     val title = when {
         !state.hasMediaAccess -> "TAP TO ALLOW"
@@ -356,12 +381,20 @@ private fun MusicDisplay(state: HomeState) {
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            BasicText(
-                artist,
-                style = glow(Vfd.Amber, 38.sp, 6.sp, blur = 10f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            Row(
+                Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.Bottom,
+                horizontalArrangement = Arrangement.spacedBy(24.dp),
+            ) {
+                BasicText(
+                    artist,
+                    Modifier.weight(1f),
+                    style = glow(Vfd.Amber, 38.sp, 6.sp, blur = 10f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                SpectrumAnalyzer(np?.isPlaying == true, Modifier.size(280.dp, 44.dp))
+            }
         }
         val done = if (duration > 0) ((pos.toFloat() / duration) * 40).toInt().coerceIn(0, 40) else 0
         SegmentBar(total = 40, lit = done, height = 18.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) { Vfd.Teal }
@@ -533,32 +566,25 @@ private fun RowScope.BigTransportButton(
 private fun MusicToggleRow(state: HomeState, actions: HomeActions, modifier: Modifier) {
     val t = state.toggles
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-        ToggleButton("SHUFFLE", VfdIcons.Shuffle, t.shuffle, actions.onShuffle)
-        ToggleButton("REPEAT", VfdIcons.Repeat, t.repeat, actions.onRepeat)
-        ToggleButton("LIKE", VfdIcons.Heart, t.liked, actions.onLike)
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxHeight()
-                .vfdPanel()
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-        ) {
-            SpectrumAnalyzer(
-                state.music?.isPlaying == true,
-                Modifier.fillMaxSize(),
-                segment = 5.dp,
-                period = 8.dp,
-            )
-        }
+        val key = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+        ToggleButton("SHUFFLE", VfdIcons.Shuffle, t.shuffle, actions.onShuffle, key)
+        ToggleButton("REPEAT", VfdIcons.Repeat, t.repeat, actions.onRepeat, key)
+        ToggleButton("LIKE", VfdIcons.Heart, t.liked, actions.onLike, key)
+        RowKey(
+            "PLAYLISTS", VfdIcons.Playlist, Vfd.Teal, key,
+            onLongClick = { actions.onPlaylistEdit(state.currentPlaylist.coerceAtLeast(0)) },
+            onClick = actions.onPlaylists,
+        )
+        RowKey("OPEN APP", VfdIcons.OpenApp, Vfd.Amber, key, halo = true, onClick = actions.onOpenMusicApp)
     }
 }
 
 @Composable
-private fun ToggleButton(word: String, icon: ImageVector, on: Boolean, onClick: () -> Unit) {
+private fun ToggleButton(word: String, icon: ImageVector, on: Boolean, onClick: () -> Unit, modifier: Modifier) {
     VfdButton(
-        Modifier
-            .width(140.dp)
-            .fillMaxHeight(),
+        modifier,
         border = if (on) Vfd.Teal else BorderStrong,
         fill = if (on) Vfd.Teal.copy(alpha = 0.18f) else Color.Transparent,
         onClickLabel = word.lowercase(Locale.ROOT),
@@ -567,6 +593,125 @@ private fun ToggleButton(word: String, icon: ImageVector, on: Boolean, onClick: 
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
             GlowIcon(icon, Vfd.Teal, 28.dp, glow = on)
             BasicText(word, style = glow(Vfd.Teal, 18.sp, 2.sp, blur = 4f))
+        }
+    }
+}
+
+/** Soft halo outside a key (the canvas' box-shadow glow). */
+private fun Modifier.halo(color: Color, radius: Dp, spread: Dp): Modifier = drawBehind {
+    val p = spread.toPx()
+    drawRoundRect(
+        color = color,
+        topLeft = Offset(-p, -p),
+        size = Size(size.width + 2 * p, size.height + 2 * p),
+        cornerRadius = CornerRadius(radius.toPx() + p),
+    )
+}
+
+/** PLAYLISTS / OPEN APP: tinted keys in the music row. */
+@Composable
+private fun RowKey(
+    word: String,
+    icon: ImageVector,
+    color: Color,
+    modifier: Modifier,
+    halo: Boolean = false,
+    onLongClick: (() -> Unit)? = null,
+    onClick: () -> Unit,
+) {
+    VfdButton(
+        if (halo) modifier.halo(color.copy(alpha = 0.12f), 10.dp, 5.dp) else modifier,
+        border = color,
+        fill = color.copy(alpha = 0.08f),
+        onClickLabel = word.lowercase(Locale.ROOT),
+        onLongClick = onLongClick,
+        onClick = onClick,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            GlowIcon(icon, color, 28.dp, glow = false)
+            BasicText(word, style = glow(color, 18.sp, 2.sp, blur = 4f), maxLines = 1)
+        }
+    }
+}
+
+/**
+ * PLAYLISTS panel (artboard 8): six pinned YouTube Music playlists over the left area.
+ * Tap plays; long-press edits; an empty key opens the editor.
+ */
+@Composable
+private fun PlaylistsPanel(state: HomeState, actions: HomeActions, modifier: Modifier) {
+    Column(
+        modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(Vfd.Panel)
+            .border(2.dp, Vfd.Teal.copy(alpha = 0.5f), RoundedCornerShape(10.dp))
+            // Swallow taps between keys so they don't reach the screen underneath.
+            .clickable(remember { MutableInteractionSource() }, indication = null) {}
+            .padding(start = 24.dp, end = 24.dp, top = 20.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(18.dp),
+    ) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+            BasicText(
+                "PLAYLISTS",
+                style = glow(Vfd.Teal, 26.sp, 3.sp, blur = 8f, family = Vfd.Orbitron, weight = FontWeight.Bold),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                BasicText("HOLD A KEY TO EDIT", style = glow(Vfd.Teal.copy(alpha = 0.7f), 18.sp, 2.sp, blur = 0f))
+                VfdButton(Modifier.size(72.dp, 64.dp), border = BorderStrong, onClickLabel = "Close playlists", onClick = actions.onPlaylistsClose) {
+                    GlowIcon(VfdIcons.Close, Vfd.Teal, 28.dp, glow = false)
+                }
+            }
+        }
+        for (row in 0 until 2) {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                for (col in 0 until 3) {
+                    val i = row * 3 + col
+                    PlaylistKey(
+                        i, state.playlists.getOrNull(i), i == state.currentPlaylist, actions,
+                        Modifier
+                            .weight(1f)
+                            .fillMaxHeight(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistKey(index: Int, p: Playlist?, playing: Boolean, actions: HomeActions, modifier: Modifier) {
+    VfdButton(
+        if (playing) modifier.halo(Vfd.Teal.copy(alpha = 0.16f), 12.dp, 6.dp) else modifier,
+        border = if (playing) Vfd.Teal else Vfd.Teal.copy(alpha = if (p == null) 0.3f else 0.6f),
+        fill = if (playing) Vfd.Teal.copy(alpha = 0.18f) else Color.Transparent,
+        shape = RoundedCornerShape(12.dp),
+        onClickLabel = if (p == null) "Set up playlist key ${index + 1}" else "Play playlist ${p.name}",
+        onLongClick = { actions.onPlaylistEdit(index) },
+        onClick = { actions.onPlaylist(index) },
+    ) {
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(horizontal = 20.dp, vertical = 18.dp),
+            verticalArrangement = Arrangement.SpaceBetween,
+        ) {
+            BasicText(if (playing) "PLAYING" else "P${index + 1}", style = glow(Vfd.Amber, 18.sp, 3.sp, blur = 4f))
+            BasicText(
+                p?.name?.ifBlank { null }?.uppercase(Locale.getDefault()) ?: if (p == null) "EMPTY" else "PLAYLIST ${index + 1}",
+                style = glow(if (p == null) Vfd.Teal.copy(alpha = 0.45f) else Vfd.Teal, 30.sp, 1.sp, blur = if (p == null) 0f else 8f)
+                    .copy(lineHeight = 1.1.em),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            BasicText(
+                if (p == null) "TAP TO SET" else "YT MUSIC",
+                style = glow(if (p == null) Vfd.Amber.copy(alpha = 0.7f) else Vfd.Teal, 18.sp, 2.sp, blur = 0f),
+            )
         }
     }
 }

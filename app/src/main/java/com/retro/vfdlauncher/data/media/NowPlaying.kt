@@ -58,6 +58,8 @@ data class NowPlaying(
     val activeQueueId: Long,
     val actions: Long,
     val customActions: List<CustomAction>,
+    /** MediaController.getQueueTitle(): the playlist/album name, when the app publishes one. */
+    val queueTitle: String? = null,
 ) {
     /** "3/12" when the session publishes a queue that contains the current item. */
     val queuePosition: String?

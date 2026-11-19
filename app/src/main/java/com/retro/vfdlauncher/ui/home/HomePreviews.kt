@@ -5,6 +5,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.retro.vfdlauncher.data.audio.Volume
 import com.retro.vfdlauncher.data.media.Band
 import com.retro.vfdlauncher.data.media.NowPlaying
+import com.retro.vfdlauncher.data.media.Playlist
 import com.retro.vfdlauncher.data.media.Preset
 import com.retro.vfdlauncher.data.media.Tuning
 import com.retro.vfdlauncher.data.nav.NextTurn
@@ -49,7 +50,13 @@ private val music = session("com.google.android.apps.youtube.music", "YT Music",
 private val weather = Weather(12, "CLOUDY", WeatherIcon.PARTLY, listOf(DayForecast("FRI", 13)), fetchedAt = 0)
 private val turn = NextTurn("300 m", "Kerkstraat", "15:17", arrow = null, packageName = "com.google.android.apps.maps")
 
-private fun state(source: Source, nav: Boolean) = HomeState(
+private val samplePlaylists = listOf(
+    Playlist("NIGHT DRIVE", "PLsample00001"), Playlist("80S SYNTH", "PLsample00002"),
+    Playlist("ROAD TRIP", "PLsample00003"), Playlist("MR2 CLASSICS", "PLsample00004"),
+    Playlist("CHILL WAVE", "PLsample00005"), null,
+)
+
+private fun state(source: Source, nav: Boolean, playlistsOpen: Boolean = false) = HomeState(
     source = source,
     radio = radio,
     music = music,
@@ -59,6 +66,9 @@ private fun state(source: Source, nav: Boolean) = HomeState(
     volume = Volume(level = 12, max = 20),
     presets = samplePresets,
     toggles = MusicToggles(),
+    playlists = samplePlaylists,
+    currentPlaylist = 0,
+    playlistsOpen = playlistsOpen,
 )
 
 @Preview(name = "4 · Radio, navigating", widthDp = 1280, heightDp = 720)
@@ -72,3 +82,7 @@ private fun MusicPreview() = HomeScreen(state(Source.MUSIC, nav = true), noActio
 @Preview(name = "7 · Radio, not navigating (weather)", widthDp = 1280, heightDp = 720)
 @Composable
 private fun WeatherPreview() = HomeScreen(state(Source.RADIO, nav = false), noActions)
+
+@Preview(name = "8 · YT Music, playlist picker", widthDp = 1280, heightDp = 720)
+@Composable
+private fun PlaylistsPreview() = HomeScreen(state(Source.MUSIC, nav = true, playlistsOpen = true), noActions)

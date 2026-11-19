@@ -23,6 +23,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.retro.vfdlauncher.data.apps.Slot
+import com.retro.vfdlauncher.data.media.PlaylistRepository
 import com.retro.vfdlauncher.data.nav.NavigationState
 import com.retro.vfdlauncher.overlay.OverlayBus
 import com.retro.vfdlauncher.overlay.OverlayService
@@ -35,6 +36,7 @@ import com.retro.vfdlauncher.ui.home.ScaledDesignCanvas
 import com.retro.vfdlauncher.ui.home.Source
 import com.retro.vfdlauncher.ui.picker.AppDrawer
 import com.retro.vfdlauncher.ui.picker.AppPicker
+import com.retro.vfdlauncher.ui.picker.PlaylistEditor
 import com.retro.vfdlauncher.ui.picker.SessionInspector
 import kotlinx.coroutines.launch
 
@@ -60,6 +62,8 @@ class MainActivity : ComponentActivity() {
                 vm.closePicker()
                 vm.closeInspector()
                 vm.closeDrawer()
+                vm.closePlaylistEditor()
+                vm.closePlaylists()
             }
         })
 
@@ -81,6 +85,10 @@ class MainActivity : ComponentActivity() {
             val drawer by vm.drawer.collectAsStateWithLifecycle()
             val inspector by vm.inspector.collectAsStateWithLifecycle()
             val favorites by vm.favorites.collectAsStateWithLifecycle()
+            val playlists by vm.playlists.collectAsStateWithLifecycle()
+            val currentPlaylist by vm.currentPlaylist.collectAsStateWithLifecycle()
+            val playlistsOpen by vm.playlistsOpen.collectAsStateWithLifecycle()
+            val playlistEditor by vm.playlistEditor.collectAsStateWithLifecycle()
             val scope = rememberCoroutineScope()
 
             val actions = HomeActions(
@@ -104,17 +112,36 @@ class MainActivity : ComponentActivity() {
                 onVolumeDown = vm::volumeDown,
                 onGrantMediaAccess = { safeStart(vm.mediaAccessIntent()) },
                 onInspect = vm::openInspector,
+                onPlaylists = vm::openPlaylists,
+                onPlaylistsClose = vm::closePlaylists,
+                onPlaylist = { i ->
+                    val p = vm.startPlaylist(i)
+                    if (p == null) {
+                        vm.editPlaylist(i)
+                    } else if (!launchApp(PlaylistRepository.openIntent(p), crt = false)) {
+                        // YouTube Music not installed: let any app (browser, YouTube) open the link.
+                        launchApp(PlaylistRepository.openIntent(p, inYtMusic = false), crt = false)
+                    }
+                },
+                onPlaylistEdit = vm::editPlaylist,
+                onOpenMusicApp = { scope.launch { launchSlot(Slot.MUSIC) } },
             )
 
             CompositionLocalProvider(LocalSpectrumLevels provides vm.spectrum.levels) { Box {
                 HomeScreen(
-                    HomeState(source, radio, music, hasAccess, weather, nextTurn, volume, presets, toggles),
+                    HomeState(
+                        source, radio, music, hasAccess, weather, nextTurn, volume, presets, toggles,
+                        playlists = playlists,
+                        currentPlaylist = currentPlaylist,
+                        playlistsOpen = playlistsOpen,
+                    ),
                     actions,
                 )
                 val p = picker
                 val d = drawer
                 val text = inspector
-                if (p != null || d != null || text != null) {
+                val edit = playlistEditor
+                if (p != null || d != null || text != null || edit != null) {
                     ScaledDesignCanvas {
                         when {
                             p != null -> AppPicker(
@@ -138,6 +165,13 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = vm::closeDrawer,
                             )
                             text != null -> SessionInspector(text, vm::closeInspector)
+                            edit != null -> PlaylistEditor(
+                                index = edit,
+                                current = playlists.getOrNull(edit),
+                                onSave = { vm.savePlaylist(edit, it) },
+                                onClear = { vm.savePlaylist(edit, null) },
+                                onDismiss = vm::closePlaylistEditor,
+                            )
                         }
                     }
                 }

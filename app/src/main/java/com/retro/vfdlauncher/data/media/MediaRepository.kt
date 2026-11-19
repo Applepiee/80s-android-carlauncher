@@ -149,6 +149,7 @@ class MediaRepository(
             activeQueueId = st?.activeQueueItemId ?: MediaSession.QueueItem.UNKNOWN_ID.toLong(),
             actions = st?.actions ?: 0L,
             customActions = st?.customActions.orEmpty().map { CustomAction(it.action, it.name.toString()) },
+            queueTitle = c.queueTitle?.toString()?.takeIf { it.isNotBlank() },
         )
     }
 
