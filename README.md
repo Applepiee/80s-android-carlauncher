@@ -1,79 +1,156 @@
 # VFD Hi-Fi car launcher
 
-A home-screen app for an Android head unit (ATOTO S8L, Android 15, 1280×720 landscape) that looks like the
-vacuum-fluorescent display of an 80s hi-fi tuner. Built for a 2003 Toyota MR2 Roadster. Runs on stock firmware:
-no root, no system privileges.
+An Android home-screen app for car head units that looks like the glowing vacuum-fluorescent display (VFD) of an
+80s hi-fi tuner: teal and amber segments, scanlines, a spectrum analyser and chunky hardware-style keys.
 
-## What it does
+It's built for an **ATOTO S8L** head unit (Android 15, 1280×720 landscape) in a **2003 Toyota MR2 Roadster**, and
+runs on stock firmware, with no root and no system privileges. It's written in Kotlin with Jetpack Compose and uses
+nothing beyond AndroidX, so it is ready right after the unit wakes from sleep.
 
-| Feature | How |
+## Features
+
+### Home screen
+
+- **Source switch.** The **RADIO** and **YT MUSIC** tabs start that app's playback and pause the other one. If the
+  app isn't running yet, the tab opens it. The screen also follows the audio, so if music starts from the steering
+  wheel it switches to the music view. Long-press a tab to choose which app it controls.
+- **Radio.** Shows the frequency in big segment digits, the station name, six preset keys, SEEK, TUNE and MUTE.
+  - Long-press a preset key to store the current station. Tap it to tune back to that station.
+  - The launcher controls the unit's own radio app through Android's media session. What works therefore depends
+    on what that app shares. See [Head-unit radio](#head-unit-radio) below.
+- **YT Music.**
+  - Display: the playlist name, title, artist and elapsed/total time, plus a 40-segment progress bar. Tap or drag
+    the bar to jump to any point in the song.
+  - Big keys: PREV / PLAY / NEXT.
+  - Small keys: SHUFFLE, REPEAT, LIKE, PLAYLISTS and OPEN APP.
+- **Playlists.** A panel with six pinned YouTube Music playlists. To set a key:
+  1. Long-press the key and give it a name.
+  2. In YouTube Music, open the playlist and choose **Share › Copy link**.
+  3. Press **PASTE** in the launcher.
+  
+  Tapping the key then starts that playlist in YouTube Music.
+- **Spectrum analyser.** It shows the real spectrum of whatever is playing, using Android's audio `Visualizer`.
+  Nothing is recorded or stored. Without permission or without a signal, it falls back to an animation. The bars
+  fall back down slowly, so on pause they sink to empty.
+- **Next turn.** While Google Maps is navigating, the top-right card shows the next turn from Maps' navigation
+  notification: the arrow, distance, street and arrival time. Tap the card to open Maps.
+- **TOP-DOWN SCORE.** When you're not navigating, the same card rates from 0 to 10 whether the roof can go down. It
+  draws the MR2 with the roof up or down, with animated rain, sun and wind. Tap the card to see the plain weather
+  instead. Long-press it for a demo of each case.
+- **App keys.**
+  - MAPS, ANDROID AUTO, CAMERA and SETTINGS are detected automatically. Long-press a key to choose a different app.
+    The picker can also show hidden system activities, which is where head units often keep the Android Auto app.
+  - **APPS** opens the app drawer. Long-press an app there to pin it to the favourites row at the top.
+- **Volume and clock.** Volume is a 20-segment media-volume bar that follows the unit's knob. The clock follows
+  the 12/24-hour setting.
+
+### TOP-DOWN SCORE rules
+
+The score starts at 10, uses the [Open-Meteo](https://open-meteo.com) hourly and 15-minute forecast, and subtracts
+points:
+
+| What | Penalty |
 |---|---|
-| Source switch | **RADIO / YT MUSIC** tabs at the top. Tapping one starts that app's playback and pauses the other (or opens the app if it isn't running yet). The screen also follows the audio: start Spotify from the steering wheel and it flips to the music view. **Long-press** a tab to pick which app it controls. |
-| Radio | Big frequency, preset/manual label, station name and a small analyser. Six station keys: **long-press** to store the current station (frequency + name), tap to recall (uses the radio app's queue if it publishes one, otherwise steps next/previous until the frequency matches). The analysers show the real spectrum of what is playing (Visualizer on the output mix; asks for microphone access, nothing is recorded) and fall back to an animation without permission or signal. Bars fall under gentle gravity, so on pause they sink to empty in about 1.5 s. SEEK = next/previous, TUNE = fast-forward/rewind (most head-unit radio apps map these to a manual step), MUTE mutes the music stream. |
-| YT Music | Title, artist, elapsed/length and a 40-segment progress bar. PREV / PLAY / NEXT, SHUFFLE and REPEAT (sent the way AndroidX media controllers do), LIKE (the app's thumbs-up custom action, if it has one). |
-| Next turn | While Google Maps navigates, its turn-by-turn notification feeds the top-right panel (arrow, distance, street, ETA). Tap it to open Maps. Otherwise the panel shows the weather. |
-| Weather | [Open-Meteo](https://open-meteo.com) (no key), unit location or a fixed fallback (`WeatherRepository.FALLBACK_LAT/LON`, Brussels). Cached; `OFFLINE` when older than 3 h. |
-| YT Music | **Scrub**: tap the progress bar to jump, or drag along it (segments and time follow your finger, it seeks on release). Header shows the playlist (the app's queue title, else the playlist last started here) and TRACK x/y; a small analyser sits beside the artist. Row: SHUFFLE, REPEAT, LIKE, **PLAYLISTS** (six pinned playlists; tap to play in YouTube Music, long-press a key to set its name and paste a share link: Share › Copy link › PASTE) and **OPEN APP** (opens the MUSIC app). |
-| TOP-DOWN meter | When not navigating, the card top right scores 0-10 whether the MR2's roof can go down, from Open-Meteo's hourly and 15-minute forecast: rain now caps it at 1; rain chance over the next 2 h (60%+ -6, 40-60 -3, 20-40 -1); "feels like" now and next hour (18-26 °C ideal; 14-18 -2, 10-14 -4, <10 -6, >30 -2); gusts (>35 km/h -1, >50 -2). MR2 drawn roof down from 5; teal 7+, amber 4-6, red below. Verdict looks 3 h ahead for rain ("ROOF UP · RAIN 17:40", "TOP DOWN TILL 17:40"). Warm (feels 18 C+) with only light rain (max 0.5 mm per 15 min, no storm, gusts up to 50 km/h) is the middle case: roof down with rain, 5/10, "SPEED KEEPS YOU DRY". Rain, sun and breeze animate around the car. Tap to see the plain weather; long-press for a demo of the cases. Logic in `data/weather/RoofMeter.kt`. |
-| Apps | MAPS, ANDROID AUTO, CAMERA, SETTINGS are auto-detected; **long-press** to reassign (the picker can show hidden system activities, where head units keep the Android Auto receiver). APPS opens an app drawer; **long-press** an app there to pin it to the FAVORITES row at the top (long-press again to unpin). |
-| Floating controls | Apps opened from the launcher get the floating VFD rail: a slim column on the left edge (home, prev/play/next, volume, fold arrow), kept clear of Google Maps' own buttons. Maps (however it is opened from the launcher) and Android Auto also get the CRT overlay: heavy scanlines, RGB phosphor stripes, a curved-glass bezel with colour fringing, deep vignette and a slow rolling refresh band. It is drawn at window alpha 0.8 and not touchable so touches reach the app; it cannot bend the app's own pixels (that would need screen capture), so curvature is suggested by the bezel. Needs "display over other apps", asked the first time you open an app. |
-| Volume | Music stream, 20 segments, follows hardware knobs. |
-| Clock | Updates on the minute; follows 12/24 h. |
-| Session inspector | **Long-press the big display** to dump every media session (actions, metadata, queue, custom actions). Use this on the S8L to see what ATOTO's radio app supports. |
+| Raining now | score capped at 1 |
+| Rain chance in the next 2 h | 60%+ −6 · 40–60% −3 · 20–40% −1 |
+| "Feels like" temperature, now and next hour | 18–26 °C ideal · 14–18 −2 · 10–14 −4 · below 10 −6 · above 30 −2 |
+| Wind gusts | over 35 km/h −1 · over 50 km/h −2 |
 
-First launch asks for location. Tap the big display ("TAP TO ALLOW MEDIA ACCESS") to give the launcher notification
-access: that is what lets it read and control other apps' playback and read Maps' next turn.
+- **Roof drawing:** the roof is drawn down from a score of 5.
+- **Colours:** teal from 7, amber for 4–6, red below 4.
+- **Verdicts:** the verdict looks up to 3 hours ahead, for example `ROOF UP · RAIN 17:40`, `TOP DOWN TILL 17:40`,
+  `TOP DOWN, HEATER ON` or `GO TOPLESS!`.
+- **Middle case:** if it's warm (feels like 18 °C or more) with only light rain and no storm, the verdict is
+  `SPEED KEEPS YOU DRY`. In light rain the airflow over the windscreen carries the drops over an open cabin.
+
+The logic lives in `data/weather/RoofMeter.kt`.
+
+### Floating controls over other apps
+
+Apps opened from the launcher get a slim VFD control rail on the left edge, with home, previous / play / next and
+volume. It stays clear of Google Maps' own buttons and folds away to a single HOME key.
+
+Maps and Android Auto also get a CRT overlay: scanlines, RGB phosphor stripes, a curved-glass bezel with colour
+fringing and a slow rolling refresh band. The overlay is slightly see-through and ignores touches, so taps still
+reach the app underneath.
+
+### Session inspector
+
+Long-press the big display to list every media session on the unit: its actions, metadata, queue and custom
+actions. This is the tool for finding out what a head unit's radio app exposes.
+
+## Permissions
+
+| Permission | Why |
+|---|---|
+| Notification access | Read and control other apps' playback, and read Maps' next turn |
+| Location (coarse) | Local weather. Falls back to a fixed location (Brussels) without it |
+| Display over other apps | The floating control rail and the CRT overlay |
+| Microphone (`RECORD_AUDIO`) | Android requires it for the audio `Visualizer`; no audio is recorded |
+| Query all packages | Find the radio, Android Auto and camera apps, including hidden ones |
+
+On first launch, tap the big display ("TAP TO ALLOW MEDIA ACCESS") to grant notification access.
+
+## Install on a head unit
+
+Every push builds a debug APK in GitHub Actions (**Actions › Build APK › latest run › Artifacts**).
+
+- **USB stick:** copy the APK to a stick and open it with the unit's file manager. Allow installing from unknown
+  sources, then choose VFD Launcher as the Home app (**Settings › Apps › Default apps › Home app**).
+- **Over the air (coming soon):** each build will also be published on this repo's **Releases** page. An
+  **UPDATE** button in the launcher will download the newest version over Wi-Fi or mobile data and open Android's
+  installer. Android always asks you to confirm an update once. Updates only install over each other when they're
+  signed with the same key, so use the release builds on the unit.
+
+## Build it yourself
+
+1. Install [Android Studio](https://developer.android.com/studio) and open this folder. Gradle downloads Gradle
+   8.11.1 and the Android 15 (API 35) SDK on the first sync.
+2. Press **Run ▶**, using either an emulator or a device:
+   - **Emulator:** create one with a 1280×720 screen at density 160 (mdpi), API 35, in landscape.
+   - **Phone or tablet:** the Android Emulator doesn't run on ARM Windows PCs. On those, use a phone over USB and
+     make it behave like the head unit with `adb shell wm size 1280x720` and `adb shell wm density 160`. Undo this
+     with `wm size reset` and `wm density reset`.
+3. Press Home and choose **VFD Launcher › Always**.
+
+From the command line, `./gradlew assembleDebug testDebugUnitTest` builds
+`app/build/outputs/apk/debug/app-debug.apk` and runs the unit tests.
+
+## Head-unit radio
+
+Android gives apps no direct access to the FM tuner. The launcher mirrors the unit's own radio app through its media
+session, the same way it mirrors YouTube Music. Here's what that means for each part:
+
+- **SEEK and play/pause** fall back to standard media keys if the radio app shares nothing.
+- **The frequency display and station name** only appear if the radio app publishes them in its "now playing" text.
+- **Presets** step through stations until the frequency matches. They jump straight there if the radio app shares
+  its own preset list.
+- **TUNE** sends fast-forward and rewind, which many head-unit radio apps treat as a manual tuning step.
+- **Volume, MUTE and the spectrum** may not affect the radio if the unit routes FM audio outside Android's mixer.
+
+If something doesn't work on your unit, the session inspector shows what its radio app exposes.
 
 ## Project layout
 
 ```
 app/src/main/java/com/retro/vfdlauncher/
-  MainActivity.kt              HOME activity, landscape, immersive, Back does nothing
-  ui/theme/                    VFD colours, fonts, glow text, line icons
-  ui/home/HomeScreen.kt        the 1280×720 layout, scaled to fit any screen
-  ui/home/Spectrum.kt          the analysers (real spectrum, animation as fallback)
-  data/audio/AudioSpectrum.kt  Visualizer on the output mix -> 14 log bands
-  ui/home/HomeViewModel.kt     state + actions
-  ui/picker/                   app picker and session inspector overlays
-  data/weather/                Open-Meteo client + cache
-  data/media/                  media sessions, frequency parsing, presets
-  data/audio/                  volume
-  data/apps/                   app scan (incl. hidden), button assignments
-  data/nav/                    next turn from the Maps notification
-  overlay/                     floating control bar + CRT overlay service
-app/src/main/res/font/         Share Tech Mono, Orbitron (SIL OFL, see licenses/)
+  MainActivity.kt          HOME activity (landscape, immersive, Back does nothing)
+  ui/theme/                VFD colours, fonts, glow text, line icons
+  ui/home/                 the 1280×720 layout (scaled to any screen), view model, analysers
+  ui/picker/               app picker, app drawer, session inspector
+  data/media/              media sessions, frequency parsing, presets, playlists
+  data/weather/            Open-Meteo client, cache, TOP-DOWN score
+  data/audio/              volume and the audio Visualizer
+  data/apps/               app scan (including hidden activities) and key assignments
+  data/nav/                next turn from the Maps notification
+  overlay/                 floating control rail and CRT overlay service
+app/src/main/res/font/     Share Tech Mono and Orbitron
 ```
 
-No libraries beyond AndroidX/Compose, so cold start stays short after the unit's BGSleep wake.
+## Credits
 
-## Build and run on your PC
-
-> The Android Emulator only runs on Intel/AMD PCs. On a Snapdragon (ARM) Windows PC, test on a phone or tablet over USB
-> instead: enable USB debugging, then `adb shell wm size 1280x720` and `adb shell wm density 160` to mimic the head unit
-> (`adb shell wm size reset` / `wm density reset` to undo).
-
-
-1. Install [Android Studio](https://developer.android.com/studio) (on a Snapdragon/ARM64 Windows PC, use the ARM64 build). Use the standard setup.
-2. **File › Open** this folder. Let Gradle sync (it downloads Gradle 8.11.1 and the SDK 35 platform the first time).
-3. Create the emulator: **Device Manager › + › Create Virtual Device › New Hardware Profile**:
-   - Name `Head unit 1280x720`, screen size 7", resolution **1280 × 720**, density **mdpi (160)**.
-   - Next, pick system image **API 35 (Android 15)**, Google APIs: `arm64-v8a` on an ARM PC, `x86_64` on Intel/AMD.
-   - Startup orientation **Landscape**. Finish.
-4. Press **Run ▶** with that emulator selected.
-5. To make it the home screen: press the emulator's Home button and choose **VFD Launcher › Always**
-   (or Settings › Apps › Default apps › Home app).
-6. To test now-playing in the emulator, start any media app (e.g. play a video in Chrome or a music app), then
-   allow notification access when the tuner panel asks.
-
-Command line: `./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`.
-
-## Install on the S8L (USB stick)
-
-Every push builds an APK in GitHub Actions (**Actions › Build APK › latest run › Artifacts › vfd-launcher-debug**).
-Copy `app-debug.apk` to a USB stick, open it with the unit's file manager, allow installing from unknown sources,
-then set VFD Launcher as the Home app.
-
-## Next
-
-- Night mode (dimmer VFD after sunset), real audio Visualizer for the spectrum (needs RECORD_AUDIO).
-- Detect the app in front (so the CRT follows Maps even when opened another way); OsmAnd teal-on-black map style.
+- Fonts: [Share Tech Mono](https://fonts.google.com/specimen/Share+Tech+Mono) and
+  [Orbitron](https://fonts.google.com/specimen/Orbitron), both under the SIL Open Font License 1.1 (see
+  [`licenses/`](licenses)).
+- Weather data: [Open-Meteo](https://open-meteo.com), free for non-commercial use, no API key.
+- Not affiliated with ATOTO, Toyota, Google or YouTube. Product names are used only to describe compatibility.
