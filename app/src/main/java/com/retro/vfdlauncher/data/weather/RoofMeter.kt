@@ -32,7 +32,7 @@ data class RoofInputs(
 enum class RoofTier { GOOD, OK, BAD }
 
 /** What animates around the car: rain (now or within the hour), sun (roof down, dry) or nothing. */
-enum class RoofFx { RAIN, SUN, NONE }
+enum class RoofFx { RAIN, SPEED_RAIN, SUN, NONE }
 
 data class RoofVerdict(
     val score: Int,
@@ -117,7 +117,7 @@ object RoofMeter {
                     verdict = "SPEED KEEPS YOU DRY",
                     roofDown = true,
                     tier = RoofTier.OK,
-                    fx = RoofFx.RAIN,
+                    fx = RoofFx.SPEED_RAIN,
                 )
             }
         }

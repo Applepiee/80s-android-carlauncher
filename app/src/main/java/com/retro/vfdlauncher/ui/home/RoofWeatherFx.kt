@@ -48,6 +48,7 @@ fun RoofWeatherFx(fx: RoofFx, roofDown: Boolean, clock: State<Float>, modifier: 
         val w = 1.3f * sx
         when (fx) {
             RoofFx.RAIN -> drawRain(t, ::p, w, color, if (roofDown) ROOF_DOWN_TOP else ROOF_UP_TOP)
+            RoofFx.SPEED_RAIN -> drawSpeedRain(t, ::p, w, color)
             RoofFx.SUN -> drawSun(t, ::p, w, color)
             RoofFx.NONE -> Unit
         }
@@ -101,6 +102,88 @@ private fun DrawScope.drawRain(t: Float, p: (Float, Float) -> Offset, w: Float, 
             val dy = s * 2.2f - s * s * 2.6f
             drawCircle(color.copy(alpha = a), 0.55f * w, p(x - dx, floor - 0.6f - dy))
             drawCircle(color.copy(alpha = a), 0.55f * w, p(x + dx, floor - 0.6f - dy))
+        }
+    }
+}
+
+// ---------------------------------------------------------------- speed keeps you dry
+
+/** Roof-down outline seen by rain coming from ahead: the bumper face, bonnet, windscreen and rear. */
+private val SPEED_PROFILE = floatArrayOf(2.5f, 34.5f, 3f, 26.5f) + ROOF_DOWN_TOP.copyOfRange(2, ROOF_DOWN_TOP.size)
+
+/** A drop flying in from ahead of the car: where it starts, how fast, and where it hits (if it does). */
+private class SpeedDrop(val y0: Float, val vx: Float, val vy: Float, val phase: Float) {
+    val x0 = -8f
+    var hitT = -1f
+    var hitX = 0f
+    var hitY = 0f
+    var flyT = 0f
+
+    init {
+        // Step along the straight path until it meets the car outline or leaves the card.
+        var s = 0f
+        while (s < 3f) {
+            val x = x0 + vx * s
+            val y = y0 + vy * s
+            if (x > 124f || y > 38f) break
+            if (x >= 2.5f && x <= 116.6f && y >= landingY(x, SPEED_PROFILE)) {
+                hitT = s; hitX = x; hitY = y
+                break
+            }
+            s += 0.004f
+        }
+        flyT = if (hitT >= 0f) hitT else s
+    }
+
+    /** One loop: fly in, then (if it hit) scatter for SCATTER_S, then a short pause. */
+    val cycle: Float get() = flyT + (if (hitT >= 0f) SCATTER_S else 0f) + 0.15f
+}
+
+private const val SCATTER_S = 0.5f
+
+/** Fixed pseudo-random spread of drops: heights from the roof-line of the windscreen down to the bumper. */
+private val speedDrops = List(12) { i ->
+    SpeedDrop(
+        y0 = 1f + (i * 7.3f) % 30f,
+        vx = 85f + (i * 13) % 25,
+        vy = 9f + (i * 5) % 7,
+        phase = (i * 0.29f) % 1f,
+    )
+}
+
+/**
+ * Warm light rain at speed (SPEED KEEPS YOU DRY): rain streaks in from ahead (left) at a shallow
+ * angle, hits the nose, bonnet and windscreen and scatters up and back over the open cabin,
+ * the airflow that keeps the driver dry. Drops above the windscreen fly straight over.
+ */
+private fun DrawScope.drawSpeedRain(t: Float, p: (Float, Float) -> Offset, w: Float, color: Color) {
+    val gravity = 90f
+    for (d in speedDrops) {
+        val c = ((t / d.cycle + d.phase) % 1f) * d.cycle
+        if (c < d.flyT) {
+            // Incoming streak, drawn along its direction of travel.
+            val x = d.x0 + d.vx * c
+            val y = d.y0 + d.vy * c
+            val len = 6f / kotlin.math.hypot(d.vx, d.vy)
+            drawLine(color.copy(alpha = 0.85f), p(x - d.vx * len, y - d.vy * len), p(x, y), w, StrokeCap.Round)
+        } else if (d.hitT >= 0f && c < d.flyT + SCATTER_S) {
+            // Scatter: three droplets kicked up and back over the car, falling and fading.
+            val s = c - d.flyT
+            val a = (1f - s / SCATTER_S) * 0.85f
+            for ((fx, fy) in listOf(0.55f to -0.32f, 0.38f to -0.48f, 0.72f to -0.16f)) {
+                val vx = d.vx * fx
+                val vy = d.vx * fy
+                val x = d.hitX + vx * s
+                val y = d.hitY - 0.5f + vy * s + 0.5f * gravity * s * s
+                val tail = 0.025f
+                drawLine(
+                    color.copy(alpha = a),
+                    p(x - vx * tail, y - (vy + gravity * s) * tail),
+                    p(x, y),
+                    w * 0.8f,
+                    StrokeCap.Round,
+                )
+            }
         }
     }
 }

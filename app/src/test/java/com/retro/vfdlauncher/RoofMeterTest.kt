@@ -121,7 +121,7 @@ class RoofMeterTest {
         assertEquals(5, v.score)
         assertTrue(v.roofDown)
         assertEquals(RoofTier.OK, v.tier)
-        assertEquals(RoofFx.RAIN, v.fx)
+        assertEquals(RoofFx.SPEED_RAIN, v.fx)
         assertEquals("SPEED KEEPS YOU DRY", v.verdict)
     }
 

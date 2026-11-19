@@ -897,7 +897,7 @@ private val RoofRed = Color(0xFFFF6A4D)
 private val ROOF_DEMOS = listOf(
     RoofVerdict(9, 24, "GO TOPLESS!", roofDown = true, tier = RoofTier.GOOD),
     RoofVerdict(6, 14, "TOP DOWN, HEATER ON", roofDown = true, tier = RoofTier.OK),
-    RoofVerdict(5, 22, "SPEED KEEPS YOU DRY", roofDown = true, tier = RoofTier.OK, fx = RoofFx.RAIN),
+    RoofVerdict(5, 22, "SPEED KEEPS YOU DRY", roofDown = true, tier = RoofTier.OK, fx = RoofFx.SPEED_RAIN),
     RoofVerdict(2, 11, "ROOF UP · RAIN 17:40", roofDown = false, tier = RoofTier.BAD, fx = RoofFx.RAIN),
 )
 
