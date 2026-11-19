@@ -232,6 +232,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         _toggles.value = _toggles.value.copy(liked = !_toggles.value.liked)
     }
 
+    /** Scrub bar: seek the music source to [positionMs]. */
+    fun seekMusic(positionMs: Long) = mediaRepo.seekToPosition(music.value?.packageName, positionMs)
+
     // ---- Playlists ----
     fun openPlaylists() {
         _playlistsOpen.value = true

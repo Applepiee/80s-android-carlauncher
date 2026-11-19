@@ -32,11 +32,15 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
@@ -115,6 +119,8 @@ class HomeActions(
     val onVolumeDown: () -> Unit,
     val onGrantMediaAccess: () -> Unit,
     val onInspect: () -> Unit,
+    /** Scrub bar: seek the music source to this position (ms). */
+    val onSeekTo: (Long) -> Unit = {},
     val onPlaylists: () -> Unit = {},
     val onPlaylistsClose: () -> Unit = {},
     /** Tap a playlist key: play it (empty key: set it up). */
@@ -279,7 +285,7 @@ private fun MainDisplay(state: HomeState, actions: HomeActions, modifier: Modifi
             )
             .padding(horizontal = 28.dp, vertical = 22.dp),
     ) {
-        if (state.source == Source.RADIO) RadioDisplay(state) else MusicDisplay(state)
+        if (state.source == Source.RADIO) RadioDisplay(state) else MusicDisplay(state, actions)
     }
 }
 
@@ -331,7 +337,7 @@ private fun RadioDisplay(state: HomeState) {
 }
 
 @Composable
-private fun MusicDisplay(state: HomeState) {
+private fun MusicDisplay(state: HomeState, actions: HomeActions) {
     val np = state.music
     // Elapsed time ticks once a second while playing.
     var nowMs by remember { mutableLongStateOf(SystemClock.elapsedRealtime()) }
@@ -347,6 +353,19 @@ private fun MusicDisplay(state: HomeState) {
         else -> np.positionMs
     }.coerceIn(0L, np?.durationMs?.takeIf { it > 0 } ?: Long.MAX_VALUE)
     val duration = np?.durationMs ?: 0L
+
+    // Scrubbing: while a finger is on the bar (and until the app reports the new position),
+    // the segments and the time show the target instead of the playing position.
+    var scrub by remember { mutableStateOf<Float?>(null) }
+    var dragging by remember { mutableStateOf(false) }
+    LaunchedEffect(np?.positionUpdatedAt, np?.title) { if (!dragging) scrub = null }
+    LaunchedEffect(scrub, dragging) {
+        if (scrub != null && !dragging) {
+            delay(2_000) // the app never confirmed: fall back to the reported position
+            scrub = null
+        }
+    }
+    val shownPos = scrub?.let { (it * duration).toLong() } ?: pos
 
     // "{playlist} · TRACK x/y": the app's queue title, else the playlist last picked here, else the app.
     val picked = state.playlists.getOrNull(state.currentPlaylist)?.name?.takeIf { it.isNotBlank() }
@@ -370,8 +389,8 @@ private fun MusicDisplay(state: HomeState) {
             )
             if (np != null) {
                 BasicText(
-                    "${mmss(pos)} / ${if (duration > 0) mmss(duration) else "--:--"}",
-                    style = glow(Vfd.Amber, 22.sp, 4.sp, blur = 6f),
+                    "${mmss(shownPos)} / ${if (duration > 0) mmss(duration) else "--:--"}",
+                    style = glow(if (dragging) Vfd.Teal else Vfd.Amber, 22.sp, 4.sp, blur = 6f),
                 )
             }
         }
@@ -397,8 +416,43 @@ private fun MusicDisplay(state: HomeState) {
                 SpectrumAnalyzer(np?.isPlaying == true, Modifier.size(280.dp, 44.dp))
             }
         }
-        val done = if (duration > 0) ((pos.toFloat() / duration) * 40).toInt().coerceIn(0, 40) else 0
-        SegmentBar(total = 40, lit = done, height = 18.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) { Vfd.Teal }
+        val done = if (duration > 0) ((shownPos.toFloat() / duration) * 40).toInt().coerceIn(0, 40) else 0
+        val canSeek = np != null && duration > 0
+        // Taller than the bar so it is easy to hit while driving; tap jumps, drag scrubs.
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(40.dp)
+                .then(
+                    if (!canSeek) Modifier else Modifier
+                        .pointerInput(duration) {
+                            detectTapGestures { o ->
+                                val f = (o.x / size.width).coerceIn(0f, 1f)
+                                scrub = f
+                                actions.onSeekTo((f * duration).toLong())
+                            }
+                        }
+                        .pointerInput(duration) {
+                            detectHorizontalDragGestures(
+                                onDragStart = { o -> dragging = true; scrub = (o.x / size.width).coerceIn(0f, 1f) },
+                                onHorizontalDrag = { change, _ ->
+                                    change.consume()
+                                    scrub = (change.position.x / size.width).coerceIn(0f, 1f)
+                                },
+                                onDragEnd = {
+                                    dragging = false
+                                    scrub?.let { actions.onSeekTo((it * duration).toLong()) }
+                                },
+                                onDragCancel = { dragging = false; scrub = null },
+                            )
+                        },
+                ),
+            contentAlignment = Alignment.BottomCenter,
+        ) {
+            SegmentBar(total = 40, lit = done, height = if (dragging) 22.dp else 18.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) {
+                if (dragging) Vfd.Amber else Vfd.Teal
+            }
+        }
     }
 }
 

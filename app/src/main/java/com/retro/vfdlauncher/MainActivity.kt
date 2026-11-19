@@ -112,6 +112,7 @@ class MainActivity : ComponentActivity() {
                 onVolumeDown = vm::volumeDown,
                 onGrantMediaAccess = { safeStart(vm.mediaAccessIntent()) },
                 onInspect = vm::openInspector,
+                onSeekTo = vm::seekMusic,
                 onPlaylists = vm::openPlaylists,
                 onPlaylistsClose = vm::closePlaylists,
                 onPlaylist = { i ->

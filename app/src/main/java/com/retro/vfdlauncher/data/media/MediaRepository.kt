@@ -198,6 +198,11 @@ class MediaRepository(
         }
     }
 
+    /** Jump to [positionMs] in the current track (the scrub bar). */
+    fun seekToPosition(pkg: String?, positionMs: Long) {
+        controller(pkg)?.transportControls?.seekTo(positionMs.coerceAtLeast(0L))
+    }
+
     fun skipToQueueItem(pkg: String?, id: Long) {
         controller(pkg)?.transportControls?.skipToQueueItem(id)
     }
