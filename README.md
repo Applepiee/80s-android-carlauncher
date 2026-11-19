@@ -67,6 +67,26 @@ No libraries beyond AndroidX/Compose, so cold start stays short after the unit's
 
 Command line: `./gradlew assembleDebug` → `app/build/outputs/apk/debug/app-debug.apk`.
 
+## Over-the-air updates (no USB)
+
+The head unit updates itself over its own SIM:
+
+- Every push builds a release APK signed with the fixed release key and publishes it to the public
+  repo [Applepiee/80s-carlauncher-releases](https://github.com/Applepiee/80s-carlauncher-releases)
+  (APKs only, no source). Version = 0.1.<GitHub run number>.
+- In the launcher: **APPS > UPDATE** checks it (the launcher also checks quietly every 6 h), downloads
+  the new APK and opens Android's installer; confirm with **Update**. The first time Android asks to
+  allow "install unknown apps" for VFD Launcher.
+- First install on the head unit: open the releases page above in the unit's browser and install
+  `vfd-launcher.apk` from the latest release.
+- Builds installed from Android Studio are debug-signed; the UPDATE key can't replace those
+  ("SIGNED WITH ANOTHER KEY") until the app is uninstalled once.
+
+One-time setup (repo secrets, Settings > Secrets and variables > Actions): `SIGNING_KEYSTORE_B64`,
+`SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`, `SIGNING_KEY_ALIAS` (from the local
+`vfd-launcher-signing` folder, never committed) and `RELEASES_TOKEN` (fine-grained token with
+Contents: read and write on the releases repo only). Without them the workflow skips publishing.
+
 ## Install on the S8L (USB stick)
 
 Every push builds an APK in GitHub Actions (**Actions › Build APK › latest run › Artifacts › vfd-launcher-debug**).

@@ -10,6 +10,8 @@ import com.retro.vfdlauncher.data.apps.AppEntry
 import com.retro.vfdlauncher.data.apps.AppRepository
 import com.retro.vfdlauncher.data.apps.Slot
 import com.retro.vfdlauncher.data.audio.AudioSpectrum
+import com.retro.vfdlauncher.data.update.UpdateState
+import com.retro.vfdlauncher.data.update.Updater
 import com.retro.vfdlauncher.data.audio.VolumeRepository
 import com.retro.vfdlauncher.data.media.MediaRepository
 import com.retro.vfdlauncher.data.media.NowPlaying
@@ -46,6 +48,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     val appRepo = AppRepository(app)
     /** Real spectrum for the analysers; started/stopped with the activity. */
     val spectrum = AudioSpectrum(app)
+    /** Over-the-air updates from the public releases repo. */
+    val updater = Updater(app).also { Updater.instance = it }
+    val updateState = updater.state
     private val prefs = app.getSharedPreferences("home", Context.MODE_PRIVATE)
 
     val weather = weatherRepo.weather
@@ -137,6 +142,32 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
+    }
+
+    /** Quiet background check (at most every 6 h); the drawer shows the result. */
+    fun checkForUpdateQuietly() {
+        viewModelScope.launch { updater.check(force = false) }
+    }
+
+    /**
+     * The drawer's UPDATE key. Returns an intent to open when Android first needs
+     * "install unknown apps" allowed for the launcher.
+     */
+    fun onUpdateKey(): Intent? {
+        when (val st = updater.state.value) {
+            is UpdateState.Available -> viewModelScope.launch { updater.install(st.release) }
+            is UpdateState.NeedsPermission -> {
+                val r = updater.pending
+                if (getApplication<Application>().packageManager.canRequestPackageInstalls() && r != null) {
+                    viewModelScope.launch { updater.install(r) }
+                } else {
+                    return updater.permissionIntent()
+                }
+            }
+            is UpdateState.Downloading, UpdateState.Installing, UpdateState.Checking -> Unit
+            else -> viewModelScope.launch { updater.check(force = true) }
+        }
+        return null
     }
 
     fun onPause() {
