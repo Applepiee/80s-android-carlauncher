@@ -912,15 +912,16 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
         modifier
             .vfdPanel()
             .semantics(mergeDescendants = true) {
-                contentDescription = "Top-down meter ${v.score} out of 10, ${v.temp} degrees, ${v.verdict}"
+                contentDescription = "Top-down score ${v.score} out of 10, ${v.temp} degrees, ${v.verdict}"
             }
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         val car = rememberVectorPainter(if (v.roofDown) Mr2Icon.RoofDown else Mr2Icon.RoofUp)
         val clock = rememberWeatherClock()
-        Box(Modifier.size(104.dp, 35.dp)) {
+        // Slightly smaller than the canvas' 104 px so "TOP-DOWN SCORE 10/10" and "24°" share a line.
+        Box(Modifier.size(93.dp, 31.dp)) {
             // Phosphor glow: blurred copies under the line art and the animated weather.
             val glowLayer = Modifier.fillMaxSize().blur(4.dp, BlurredEdgeTreatment.Unbounded)
             Image(car, null, glowLayer, alpha = 0.7f)
@@ -934,8 +935,20 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom,
             ) {
-                BasicText("TOP-DOWN ${v.score}/10", style = glow(Vfd.Teal, 18.sp, 3.sp, blur = 4f))
-                BasicText("${v.temp}°", style = glow(Vfd.Teal, 26.sp, blur = 8f).copy(lineHeight = 1.em))
+                BasicText(
+                    "TOP-DOWN SCORE ${v.score}/10",
+                    Modifier.weight(1f, fill = false),
+                    style = glow(Vfd.Teal, 18.sp, 1.sp, blur = 4f),
+                    maxLines = 1,
+                    softWrap = false,
+                )
+                BasicText(
+                    "${v.temp}°",
+                    Modifier.padding(start = 6.dp),
+                    style = glow(Vfd.Teal, 26.sp, blur = 8f).copy(lineHeight = 1.em),
+                    maxLines = 1,
+                    softWrap = false,
+                )
             }
             SegmentBar(total = 10, lit = v.score, height = 14.dp, ghost = Vfd.Teal.copy(alpha = 0.12f)) { color }
             BasicText(
