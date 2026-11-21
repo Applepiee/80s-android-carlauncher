@@ -10,7 +10,11 @@ import com.retro.vfdlauncher.data.apps.AppEntry
 import com.retro.vfdlauncher.data.apps.AppRepository
 import com.retro.vfdlauncher.data.apps.Slot
 import com.retro.vfdlauncher.data.audio.AudioSpectrum
+import android.app.role.RoleManager
+import android.os.Build
 import com.retro.vfdlauncher.data.update.UpdateState
+import com.retro.vfdlauncher.overlay.RailAccessibilityService
+import com.retro.vfdlauncher.ui.picker.LauncherStatus
 import com.retro.vfdlauncher.data.update.Updater
 import com.retro.vfdlauncher.data.audio.VolumeRepository
 import com.retro.vfdlauncher.data.media.MediaRepository
@@ -132,6 +136,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onResume() {
+        refreshStatus()
         volumeRepo.start()
         mediaRepo.start()
         if (weatherJob?.isActive != true) {
@@ -185,6 +190,51 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun mediaAccessIntent(): Intent = mediaRepo.accessSettingsIntent()
+
+    // ---- Launcher settings (the SETTINGS key) ----
+    private val _settingsOpen = MutableStateFlow(false)
+    val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
+
+    private val _status = MutableStateFlow(LauncherStatus())
+    val status: StateFlow<LauncherStatus> = _status.asStateFlow()
+
+    fun openSettings() {
+        refreshStatus()
+        _settingsOpen.value = true
+    }
+
+    fun closeSettings() {
+        _settingsOpen.value = false
+    }
+
+    /** Re-read what Android has granted; called on resume (the user may come back from Settings). */
+    fun refreshStatus() {
+        val app = getApplication<Application>()
+        _status.value = LauncherStatus(
+            isDefaultHome = isDefaultHome(app),
+            mediaAccess = mediaRepo.checkAccess(),
+            overlay = android.provider.Settings.canDrawOverlays(app),
+            backButton = RailAccessibilityService.isEnabled(app),
+            version = updater.currentVersion,
+        )
+    }
+
+    private fun isDefaultHome(app: Application): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val rm = app.getSystemService(RoleManager::class.java)
+            if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME)) return rm.isRoleHeld(RoleManager.ROLE_HOME)
+        }
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val resolved = app.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        return resolved?.activityInfo?.packageName == app.packageName
+    }
+
+    /** The system's "make this the home app" request, or null where it doesn't exist. */
+    fun requestHomeRoleIntent(): Intent? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val rm = getApplication<Application>().getSystemService(RoleManager::class.java) ?: return null
+        return if (rm.isRoleAvailable(RoleManager.ROLE_HOME)) rm.createRequestRoleIntent(RoleManager.ROLE_HOME) else null
+    }
 
     private fun setSource(s: Source) {
         _source.value = s

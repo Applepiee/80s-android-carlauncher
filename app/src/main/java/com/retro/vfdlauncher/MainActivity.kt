@@ -38,6 +38,10 @@ import com.retro.vfdlauncher.ui.picker.AppDrawer
 import com.retro.vfdlauncher.ui.picker.AppPicker
 import com.retro.vfdlauncher.ui.picker.PlaylistEditor
 import com.retro.vfdlauncher.ui.picker.SessionInspector
+import com.retro.vfdlauncher.ui.picker.LauncherSettings
+import com.retro.vfdlauncher.ui.picker.SettingsActions
+import com.retro.vfdlauncher.ui.picker.updateLabel
+import com.retro.vfdlauncher.overlay.RailAccessibilityService
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -51,6 +55,23 @@ class MainActivity : ComponentActivity() {
             if (granted[Manifest.permission.RECORD_AUDIO] == true) vm.spectrum.start()
         }
 
+    /**
+     * "Make default launcher": Android's own home-app request. If it is declined or missing
+     * (some head units), fall back to the Default apps > Home app screen.
+     */
+    private val homeRole =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            vm.refreshStatus()
+            if (!vm.status.value.isDefaultHome) safeStart(Intent(Settings.ACTION_HOME_SETTINGS))
+        }
+
+    private fun makeDefaultLauncher() {
+        val request = vm.requestHomeRoleIntent()
+        if (request == null || runCatching { homeRole.launch(request) }.isFailure) {
+            safeStart(Intent(Settings.ACTION_HOME_SETTINGS))
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -62,6 +83,7 @@ class MainActivity : ComponentActivity() {
                 vm.closePicker()
                 vm.closeInspector()
                 vm.closeDrawer()
+                vm.closeSettings()
                 vm.closePlaylistEditor()
                 vm.closePlaylists()
             }
@@ -86,6 +108,8 @@ class MainActivity : ComponentActivity() {
             val inspector by vm.inspector.collectAsStateWithLifecycle()
             val favorites by vm.favorites.collectAsStateWithLifecycle()
             val update by vm.updateState.collectAsStateWithLifecycle()
+            val settingsOpen by vm.settingsOpen.collectAsStateWithLifecycle()
+            val status by vm.status.collectAsStateWithLifecycle()
             val playlists by vm.playlists.collectAsStateWithLifecycle()
             val currentPlaylist by vm.currentPlaylist.collectAsStateWithLifecycle()
             val playlistsOpen by vm.playlistsOpen.collectAsStateWithLifecycle()
@@ -95,7 +119,8 @@ class MainActivity : ComponentActivity() {
             val actions = HomeActions(
                 onSource = { s -> scope.launch { vm.selectSource(s)?.let { launchApp(it, crt = false) } } },
                 onSourceLongPress = { s -> vm.openPicker(if (s == Source.RADIO) Slot.RADIO else Slot.MUSIC) },
-                onSlot = { slot -> scope.launch { launchSlot(slot) } },
+                // SETTINGS opens the launcher's own settings (with a way through to Android's).
+                onSlot = { slot -> if (slot == Slot.SETTINGS) vm.openSettings() else scope.launch { launchSlot(slot) } },
                 onSlotLongPress = { vm.openPicker(it) },
                 onApps = vm::openDrawer,
                 onPreset = vm::onPresetTap,
@@ -143,7 +168,7 @@ class MainActivity : ComponentActivity() {
                 val d = drawer
                 val text = inspector
                 val edit = playlistEditor
-                if (p != null || d != null || text != null || edit != null) {
+                if (p != null || d != null || text != null || edit != null || settingsOpen) {
                     ScaledDesignCanvas {
                         when {
                             p != null -> AppPicker(
@@ -170,6 +195,24 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = vm::closeDrawer,
                             )
                             text != null -> SessionInspector(text, vm::closeInspector)
+                            settingsOpen -> LauncherSettings(
+                                status = status,
+                                updateLabel = updateLabel(update, vm.updater.currentVersion).first,
+                                a = SettingsActions(
+                                    onMakeDefault = ::makeDefaultLauncher,
+                                    onMediaAccess = { safeStart(vm.mediaAccessIntent()) },
+                                    onOverlay = {
+                                        safeStart(
+                                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")),
+                                        )
+                                    },
+                                    onBackButton = { safeStart(RailAccessibilityService.settingsIntent()) },
+                                    onResetRail = { OverlayService.resetRailPosition(this@MainActivity) },
+                                    onUpdate = { vm.onUpdateKey()?.let { safeStart(it) } },
+                                    onAndroidSettings = { safeStart(Intent(Settings.ACTION_SETTINGS)) },
+                                    onDismiss = vm::closeSettings,
+                                ),
+                            )
                             edit != null -> PlaylistEditor(
                                 index = edit,
                                 current = playlists.getOrNull(edit),

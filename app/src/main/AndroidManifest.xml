@@ -66,5 +66,18 @@
         <receiver
             android:name=".data.update.InstallResultReceiver"
             android:exported="false" />
+        <!-- BACK button on the floating rail (performGlobalAction); the user switches it on. -->
+        <service
+            android:name=".overlay.RailAccessibilityService"
+            android:exported="false"
+            android:label="@string/rail_accessibility_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/rail_accessibility" />
+        </service>
     </application>
 </manifest>

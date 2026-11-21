@@ -52,6 +52,8 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     private lateinit var media: MediaRepository
     private var bar: View? = null
     private var crt: View? = null
+    private var barLp: WindowManager.LayoutParams? = null
+    private val prefs by lazy { getSharedPreferences("rail", MODE_PRIVATE) }
 
     override fun onCreate() {
         super.onCreate()
@@ -77,7 +79,7 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         super.onConfigurationChanged(newConfig)
         val b = bar ?: return
         runCatching { wm.removeView(b) }
-        bar = createBar().also { runCatching { wm.addView(it, barParams()) } }
+        bar = createBar().also { runCatching { wm.addView(it, barParams().also { lp -> barLp = lp }) } }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int = START_STICKY
@@ -97,11 +99,11 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         // CRT first so the bar sits above it.
         if (showCrt && crt == null) crt = CrtView(this).also { wm.addView(it, crtParams()) }
         if (!showCrt) crt?.let { runCatching { wm.removeView(it) }; crt = null }
-        if (showBar && bar == null) bar = createBar().also { wm.addView(it, barParams()) }
+        if (showBar && bar == null) bar = createBar().also { wm.addView(it, barParams().also { lp -> barLp = lp }) }
         if (!showBar) bar?.let { runCatching { wm.removeView(it) }; bar = null }
         if (showBar && showCrt) bar?.let {
             // Re-add so it stays on top of the CRT window that was just added.
-            runCatching { wm.removeView(it); wm.addView(it, barParams()) }
+            runCatching { wm.removeView(it); wm.addView(it, barParams().also { lp -> barLp = lp }) }
         }
     }
 
@@ -117,6 +119,9 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                         media = media,
                         volume = volume,
                         onHome = ::goHome,
+                        onBack = ::goBack,
+                        onDrag = ::dragBar,
+                        onDragEnd = ::dropBar,
                     )
                 }
             },
@@ -141,6 +146,47 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         val b = screenBounds()
         return minOf(b.width() / 1280f, b.height() / 720f)
     }
+
+    /** BACK on the rail: needs the accessibility service; the first time, open its settings. */
+    private fun goBack() {
+        if (RailAccessibilityService.back()) return
+        android.widget.Toast.makeText(
+            this,
+            "Turn on \"Roadster Launcher BACK button\" to use BACK",
+            android.widget.Toast.LENGTH_LONG,
+        ).show()
+        runCatching { startActivity(RailAccessibilityService.settingsIntent()) }
+    }
+
+    // ---- Moving the rail: drag the grip; on release it snaps to the nearer side edge. ----
+
+    private fun dragBar(dx: Float, dy: Float) {
+        val lp = barLp ?: return
+        val b = bar ?: return
+        val right = lp.gravity and Gravity.HORIZONTAL_GRAVITY_MASK == Gravity.END
+        lp.x = (lp.x + (if (right) -dx else dx)).toInt()
+        val half = (screenBounds().height() - b.height) / 2
+        lp.y = (lp.y + dy).toInt().coerceIn(-half, half)
+        runCatching { wm.updateViewLayout(b, lp) }
+    }
+
+    private fun dropBar() {
+        val lp = barLp ?: return
+        val b = bar ?: return
+        val width = screenBounds().width()
+        val right = lp.gravity and Gravity.HORIZONTAL_GRAVITY_MASK == Gravity.END
+        val centre = if (right) width - lp.x - b.width / 2 else lp.x + b.width / 2
+        val toRight = centre > width / 2
+        lp.gravity = (if (toRight) Gravity.END else Gravity.START) or Gravity.CENTER_VERTICAL
+        lp.x = edgeMargin()
+        runCatching { wm.updateViewLayout(b, lp) }
+        prefs.edit()
+            .putBoolean(KEY_RIGHT, toRight)
+            .putFloat(KEY_Y, lp.y / screenBounds().height().toFloat())
+            .apply()
+    }
+
+    private fun edgeMargin() = (16 * barScale()).toInt() + leftInset()
 
     private fun goHome() {
         startActivity(
@@ -173,10 +219,12 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
         PixelFormat.TRANSLUCENT,
     ).apply {
-        // Vertical rail on the left edge, centred: Maps' own buttons sit top, bottom and right.
-        gravity = Gravity.START or Gravity.CENTER_VERTICAL
-        x = (16 * barScale()).toInt() + leftInset()
-        y = 0
+        // Vertical rail on a side edge (left by default: Maps' own buttons sit top, bottom and
+        // right); the user can drag it elsewhere and that is remembered.
+        val right = prefs.getBoolean(KEY_RIGHT, false)
+        gravity = (if (right) Gravity.END else Gravity.START) or Gravity.CENTER_VERTICAL
+        x = edgeMargin()
+        y = (prefs.getFloat(KEY_Y, 0f) * screenBounds().height()).toInt()
     }
 
     private fun startInForeground() {
@@ -197,6 +245,14 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     }
 
     companion object {
+        private const val KEY_RIGHT = "right"
+        private const val KEY_Y = "y"
+
+        /** Settings: put the rail back on the left, centred. */
+        fun resetRailPosition(context: Context) {
+            context.getSharedPreferences("rail", Context.MODE_PRIVATE).edit().clear().apply()
+        }
+
         private const val CHANNEL = "overlay"
         private const val NOTIFICATION_ID = 1
 
