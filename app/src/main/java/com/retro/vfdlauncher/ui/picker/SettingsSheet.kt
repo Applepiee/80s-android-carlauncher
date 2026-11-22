@@ -39,8 +39,8 @@ data class LauncherStatus(
     val version: String = "",
     /** "Modify system settings" granted: night mode can lower the real backlight. */
     val backlight: Boolean = false,
-    /** Black layer strength at night, 0..0.8. */
-    val nightDim: Float = 0.6f,
+    /** Black layer strength at night, 0..0.9. */
+    val nightDim: Float = 0.7f,
 )
 
 /** Actions of the launcher settings sheet. */

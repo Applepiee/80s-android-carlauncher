@@ -16,7 +16,7 @@ data class SunDay(val rise: LocalDateTime, val set: LocalDateTime)
 /** Night mode as the screen should show it right now. */
 data class NightState(
     val isNight: Boolean = false,
-    /** How dark the black layer is, 0..0.8 (0 in daytime). */
+    /** How dark the black layer is, 0..0.9 (0 in daytime); over other apps at most 0.8. */
     val dim: Float = 0f,
     /** The user overrode the automatic choice with the moon key. */
     val manual: Boolean = false,
@@ -58,8 +58,9 @@ object NightMode {
     private const val KEY_DAY_BRIGHTNESS = "dayBrightness"
     private const val KEY_DAY_AUTO = "dayAuto"
     private const val KEY_BACKLIGHT_LOWERED = "lowered"
-    const val DEFAULT_DIM = 0.6f
-    const val MAX_DIM = 0.8f
+    const val DEFAULT_DIM = 0.7f
+    /** Up to 90 % on the launcher itself; over other apps Android caps the shade at 80 %. */
+    const val MAX_DIM = 0.9f
 
     /** New forecast: sunrise/sunset days and the location's UTC offset. */
     fun setSun(context: Context, sun: List<SunDay>, offsetSeconds: Int) {
