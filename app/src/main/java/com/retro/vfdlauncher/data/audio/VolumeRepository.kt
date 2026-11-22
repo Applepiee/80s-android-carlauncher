@@ -54,7 +54,9 @@ class VolumeRepository(context: Context) {
      * bar is the volume UI); if the index doesn't move, let Android route it to the active stream
      * with the unit's own volume UI, then fall back to volume key events and the playing session.
      */
-    private fun adjust(direction: Int) {
+    private val main = Handler(Looper.getMainLooper())
+
+    private fun adjust(direction: Int, skipStream: Boolean = false) {
         val before = snapshot()
         val atLimit = (direction == AudioManager.ADJUST_RAISE && before.music.first >= before.music.second) ||
             (direction == AudioManager.ADJUST_LOWER && before.music.first <= 0)
@@ -65,9 +67,17 @@ class VolumeRepository(context: Context) {
             if (!ok) tried[tried.lastIndex] = "$name (error)"
             return snapshot() != before
         }
-        val changed = attempt("adjustStreamVolume(MUSIC)") {
+        val streamWorked = !skipStream && attempt("adjustStreamVolume(MUSIC)") {
             audio.adjustStreamVolume(AudioManager.STREAM_MUSIC, direction, 0)
-        } || atLimit ||
+        }
+        if (streamWorked && !atLimit) {
+            // Some head units accept the change and then put their own (MCU) volume back a moment
+            // later. If that happens, go the way the knob goes instead.
+            main.postDelayed({
+                if (snapshot() == before) adjust(direction, skipStream = true)
+            }, 700)
+        }
+        val changed = streamWorked || atLimit ||
             attempt("adjustSuggestedStreamVolume(SHOW_UI)") {
                 audio.adjustSuggestedStreamVolume(direction, AudioManager.USE_DEFAULT_STREAM_TYPE, AudioManager.FLAG_SHOW_UI)
             } ||
@@ -79,6 +89,7 @@ class VolumeRepository(context: Context) {
             (sessionAdjust != null && attempt("media session adjustVolume") { sessionAdjust?.invoke(direction) })
         val after = snapshot()
         lastTry = buildString {
+            if (skipStream) append("music stream was reset by the unit → ")
             append(tried.joinToString(" → "))
             append(if (atLimit) " · already at the limit" else if (changed) " · changed" else " · NOTHING CHANGED")
             append(" · music ${before.music.first} → ${after.music.first}")
