@@ -13,6 +13,19 @@ object OverlayBus {
     private val _crtWanted = MutableStateFlow(false)
     val crtWanted: StateFlow<Boolean> = _crtWanted.asStateFlow()
 
+    /** Settings > DISPLAY > CRT EFFECT OVER APPS (saved in prefs "display"). */
+    private val _crtEnabled = MutableStateFlow(true)
+    val crtEnabled: StateFlow<Boolean> = _crtEnabled.asStateFlow()
+
+    fun loadCrtEnabled(context: android.content.Context) {
+        _crtEnabled.value = context.getSharedPreferences("display", android.content.Context.MODE_PRIVATE).getBoolean("crt", true)
+    }
+
+    fun setCrtEnabled(context: android.content.Context, on: Boolean) {
+        context.getSharedPreferences("display", android.content.Context.MODE_PRIVATE).edit().putBoolean("crt", on).apply()
+        _crtEnabled.value = on
+    }
+
     fun setLauncherVisible(visible: Boolean) {
         _launcherVisible.value = visible
     }

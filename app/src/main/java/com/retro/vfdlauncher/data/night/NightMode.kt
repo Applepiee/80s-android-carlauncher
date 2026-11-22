@@ -59,8 +59,8 @@ object NightMode {
     private const val KEY_DAY_AUTO = "dayAuto"
     private const val KEY_BACKLIGHT_LOWERED = "lowered"
     const val DEFAULT_DIM = 0.7f
-    /** Up to 90 % on the launcher itself; over other apps Android caps the shade at 80 %. */
-    const val MAX_DIM = 0.9f
+    /** 0-80 % in steps of 10 (canvas Settings); Android caps see-through overlays at 80 % anyway. */
+    const val MAX_DIM = 0.8f
 
     /** New forecast: sunrise/sunset days and the location's UTC offset. */
     fun setSun(context: Context, sun: List<SunDay>, offsetSeconds: Int) {
@@ -76,6 +76,29 @@ object NightMode {
         prefs(context).edit().putFloat(KEY_DIM, level.coerceIn(0f, MAX_DIM)).apply()
         update(context)
     }
+
+    /**
+     * DAY NOW / NIGHT NOW in settings: force day or night until the next sunrise or sunset.
+     * Pressing the one that is already forced goes back to AUTO.
+     */
+    fun force(context: Context, night: Boolean) {
+        val st = _state.value
+        if (st.manual && st.isNight == night) {
+            prefs(context).edit().remove(KEY_OVERRIDE).remove(KEY_OVERRIDE_UNTIL).apply()
+            update(context)
+            return
+        }
+        val now = now()
+        val nextAuto = NightClock.nextSwitch(days, now) ?: now.plusHours(12)
+        prefs(context).edit()
+            .putString(KEY_OVERRIDE, if (night) "on" else "off")
+            .putLong(KEY_OVERRIDE_UNTIL, nextAuto.toEpochSecond(offset()))
+            .apply()
+        update(context)
+    }
+
+    /** True when the next switch is a sunrise (it is night now by the clock). */
+    fun nextIsSunrise(): Boolean = NightClock.isNight(days, now())
 
     /** Moon key: flip night on/off now; holds until the next sunrise or sunset. */
     fun toggle(context: Context) {

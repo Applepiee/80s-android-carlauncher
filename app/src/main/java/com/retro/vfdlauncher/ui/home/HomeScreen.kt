@@ -271,7 +271,7 @@ private fun TopBar(state: HomeState, actions: HomeActions, modifier: Modifier) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             MoonKey(state.night, actions.onNight)
             Clock()
         }
@@ -282,13 +282,13 @@ private fun TopBar(state: HomeState, actions: HomeActions, modifier: Modifier) {
 @Composable
 private fun MoonKey(night: Boolean, onClick: () -> Unit) {
     VfdButton(
-        Modifier.size(60.dp),
-        border = if (night) Vfd.Amber else BorderStrong,
-        fill = if (night) Vfd.Amber.copy(alpha = 0.15f) else Color.Transparent,
+        Modifier.size(56.dp),
+        border = if (night) Vfd.Amber else Vfd.Teal.copy(alpha = 0.5f),
+        fill = if (night) Vfd.Amber.copy(alpha = 0.18f) else Color.Transparent,
         onClickLabel = if (night) "Night mode off" else "Night mode on",
         onClick = onClick,
     ) {
-        GlowIcon(VfdIcons.Moon, if (night) Vfd.Amber else Vfd.Teal, 28.dp, glow = night)
+        GlowIcon(VfdIcons.Moon, if (night) Vfd.Amber else Vfd.Teal.copy(alpha = 0.75f), 26.dp, glow = false)
     }
 }
 

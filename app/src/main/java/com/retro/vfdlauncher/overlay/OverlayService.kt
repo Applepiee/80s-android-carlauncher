@@ -67,8 +67,9 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
 
         lifecycleScope.launch {
-            combine(OverlayBus.launcherVisible, OverlayBus.crtWanted, NightMode.state) { home, crtWanted, night ->
-                Triple(home, crtWanted, night.dim)
+            OverlayBus.loadCrtEnabled(this@OverlayService)
+            combine(OverlayBus.launcherVisible, OverlayBus.crtWanted, OverlayBus.crtEnabled, NightMode.state) { home, crtWanted, crtOn, night ->
+                Triple(home, crtWanted && crtOn, night.dim)
             }.collect { (home, crtWanted, dim) ->
                 if (!home) media.start() // picks up media access granted since the service started
                 render(showBar = !home, crt = !home && crtWanted, dim = if (home) 0f else dim)
@@ -133,7 +134,6 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                         onBack = ::goBack,
                         onDrag = ::dragBar,
                         onDragEnd = ::dropBar,
-                        onNight = { NightMode.toggle(this@OverlayService) },
                     )
                 }
             },

@@ -270,6 +270,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toggleNight() = NightMode.toggle(getApplication())
 
+    /** Settings DAY NOW / NIGHT NOW (pressing the forced one again returns to AUTO). */
+    fun forceNight(night: Boolean) = NightMode.force(getApplication(), night)
+
+    fun toggleCrt() {
+        val app = getApplication<Application>()
+        com.retro.vfdlauncher.overlay.OverlayBus.loadCrtEnabled(app)
+        com.retro.vfdlauncher.overlay.OverlayBus.setCrtEnabled(app, !com.retro.vfdlauncher.overlay.OverlayBus.crtEnabled.value)
+        refreshStatus()
+    }
+
     fun changeNightDim(delta: Float) {
         val app = getApplication<Application>()
         NightMode.setDimLevel(app, ((NightMode.dimLevel(app) + delta) * 10).let { Math.round(it) / 10f })
@@ -286,6 +296,9 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         NightMode.update(app)
         _status.value = LauncherStatus(
             backlight = NightMode.canChangeBacklight(app),
+            location = app.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED,
+            crt = com.retro.vfdlauncher.overlay.OverlayBus.crtEnabled.value,
             nightDim = NightMode.dimLevel(app),
             isDefaultHome = isDefaultHome(app),
             mediaAccess = mediaRepo.checkAccess(),
@@ -322,10 +335,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      * the source's app when it has no session yet (e.g. radio app not started since boot).
      */
     suspend fun selectSource(s: Source): Intent? {
+        val fromPhone = _phoneOpen.value
+        _phoneOpen.value = false
         setSource(s)
         val np = if (s == Source.RADIO) radio.value else music.value
-        if (np != null && mediaRepo.playOnly(np.packageName)) return null
-        return appRepo.intentFor(if (s == Source.RADIO) Slot.RADIO else Slot.MUSIC)
+        return when (SourceTap.decide(fromPhone, np != null)) {
+            SourceTap.SHOW_ONLY -> null
+            SourceTap.PLAY -> if (np != null && mediaRepo.playOnly(np.packageName)) null
+                else appRepo.intentFor(if (s == Source.RADIO) Slot.RADIO else Slot.MUSIC)
+            SourceTap.OPEN_APP -> appRepo.intentFor(if (s == Source.RADIO) Slot.RADIO else Slot.MUSIC)
+        }
     }
 
     // ---- Shared ----
@@ -472,6 +491,22 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 Source.RADIO to appRepo.packageFor(Slot.RADIO),
                 Source.MUSIC to appRepo.packageFor(Slot.MUSIC),
             )
+        }
+    }
+}
+
+/**
+ * What a RADIO / YT MUSIC tab tap does. Leaving the PHONE view only switches the view (first tap,
+ * whatever is playing); otherwise play that source, or open its app when it has no session.
+ */
+enum class SourceTap {
+    SHOW_ONLY, PLAY, OPEN_APP;
+
+    companion object {
+        fun decide(fromPhone: Boolean, hasSession: Boolean): SourceTap = when {
+            fromPhone -> SHOW_ONLY
+            hasSession -> PLAY
+            else -> OPEN_APP
         }
     }
 }

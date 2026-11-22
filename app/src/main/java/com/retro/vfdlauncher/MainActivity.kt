@@ -59,6 +59,7 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             if (granted[Manifest.permission.ACCESS_COARSE_LOCATION] == true) vm.onLocationGranted()
             if (granted[Manifest.permission.RECORD_AUDIO] == true) vm.spectrum.start()
+            vm.refreshStatus()
         }
 
     /**
@@ -91,6 +92,17 @@ class MainActivity : ComponentActivity() {
     /** Press the call notification's own button; without one, open the phone app instead. */
     private fun callButton(intent: android.app.PendingIntent?) {
         if (!PhoneCalls.press(intent)) lifecycleScope.launch { launchSlot(Slot.PHONE) }
+    }
+
+    /** Settings > LOCATION > GRANT: ask again, or Android's app page once it was refused for good. */
+    private fun askLocation() {
+        val p = Manifest.permission.ACCESS_COARSE_LOCATION
+        if (shouldShowRequestPermissionRationale(p) || !getSharedPreferences("home", MODE_PRIVATE).getBoolean("locAsked", false)) {
+            getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("locAsked", true).apply()
+            permissions.launch(arrayOf(p))
+        } else {
+            safeStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        }
     }
 
     private fun makeDefaultLauncher() {
@@ -250,6 +262,7 @@ class MainActivity : ComponentActivity() {
                                 FavoriteEditor(
                                     index = i,
                                     current = favoriteContacts.getOrNull(i),
+                                    recents = recents.orEmpty(),
                                     onSave = { vm.saveFavorite(i, it) },
                                     onClear = { vm.saveFavorite(i, null) },
                                     onDismiss = vm::closeFavoriteEditor,
@@ -258,7 +271,6 @@ class MainActivity : ComponentActivity() {
                             settingsOpen -> LauncherSettings(
                                 status = status,
                                 night = night,
-                                updateLabel = updateLabel(update, vm.updater.currentVersion).first,
                                 a = SettingsActions(
                                     onMakeDefault = ::makeDefaultLauncher,
                                     onMediaAccess = { safeStart(vm.mediaAccessIntent()) },
@@ -267,13 +279,11 @@ class MainActivity : ComponentActivity() {
                                             Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")),
                                         )
                                     },
-                                    onBackButton = { safeStart(RailAccessibilityService.settingsIntent()) },
-                                    onResetRail = { OverlayService.resetRailPosition(this@MainActivity) },
-                                    onBacklight = { safeStart(NightMode.backlightPermissionIntent(this@MainActivity)) },
+                                    onLocation = ::askLocation,
+                                    onCrt = vm::toggleCrt,
                                     onNightDim = vm::changeNightDim,
-                                    onNightToggle = vm::toggleNight,
-                                    onUpdate = { vm.onUpdateKey()?.let { safeStart(it) } },
-                                    onAndroidSettings = { safeStart(Intent(Settings.ACTION_SETTINGS)) },
+                                    onDayNow = { vm.forceNight(false) },
+                                    onNightNow = { vm.forceNight(true) },
                                     onDismiss = vm::closeSettings,
                                 ),
                             )

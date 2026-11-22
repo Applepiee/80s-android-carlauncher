@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only: a fake call for testing the call bar without a real call. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application>
+        <receiver
+            android:name=".debug.FakeCallReceiver"
+            android:exported="false" />
+        <activity
+            android:name=".debug.FakeCallActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            tools:ignore="ExportedActivity" />
+    </application>
+</manifest>
