@@ -13,6 +13,10 @@ import com.retro.vfdlauncher.data.audio.AudioSpectrum
 import android.app.role.RoleManager
 import android.os.Build
 import com.retro.vfdlauncher.data.night.NightMode
+import com.retro.vfdlauncher.data.phone.Favorite
+import com.retro.vfdlauncher.data.phone.PhoneCalls
+import com.retro.vfdlauncher.data.phone.PhoneRepository
+import com.retro.vfdlauncher.data.phone.RecentCall
 import com.retro.vfdlauncher.data.update.UpdateState
 import com.retro.vfdlauncher.overlay.RailAccessibilityService
 import com.retro.vfdlauncher.ui.picker.LauncherStatus
@@ -114,6 +118,54 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private var weatherJob: Job? = null
 
     val night = NightMode.state
+
+    // ---- Phone (canvas page "Phone calls") ----
+    val phoneRepo = PhoneRepository(app)
+    val call = PhoneCalls.call
+    val favoriteContacts = phoneRepo.favorites
+
+    private val _phoneOpen = MutableStateFlow(false)
+    val phoneOpen: StateFlow<Boolean> = _phoneOpen.asStateFlow()
+
+    private val _recents = MutableStateFlow<List<RecentCall>?>(null)
+    val recents: StateFlow<List<RecentCall>?> = _recents.asStateFlow()
+
+    private val _recentsNote = MutableStateFlow<String?>(null)
+    val recentsNote: StateFlow<String?> = _recentsNote.asStateFlow()
+
+    /** Favourite key being edited, or null. */
+    private val _favoriteEditor = MutableStateFlow<Int?>(null)
+    val favoriteEditor: StateFlow<Int?> = _favoriteEditor.asStateFlow()
+
+    fun togglePhone() {
+        _phoneOpen.value = !_phoneOpen.value
+        if (_phoneOpen.value) loadRecents()
+    }
+
+    fun loadRecents() {
+        viewModelScope.launch {
+            val list = phoneRepo.recentCalls()
+            _recents.value = list
+            _recentsNote.value = when {
+                !phoneRepo.canReadCallLog() -> "ALLOW CALL LOG ACCESS TO SEE RECENT CALLS"
+                list.isEmpty() -> "NO CALLS IN ANDROID'S CALL LOG · USE KEYPAD & CONTACTS"
+                else -> null
+            }
+        }
+    }
+
+    fun editFavorite(i: Int) {
+        _favoriteEditor.value = i
+    }
+
+    fun closeFavoriteEditor() {
+        _favoriteEditor.value = null
+    }
+
+    fun saveFavorite(i: Int, f: Favorite?) {
+        phoneRepo.setFavorite(i, f)
+        _favoriteEditor.value = null
+    }
 
     init {
         // Night mode: new sunrise/sunset with every forecast, and a re-check every minute.

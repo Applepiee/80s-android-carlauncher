@@ -109,6 +109,15 @@ data class HomeState(
     val playlistsOpen: Boolean = false,
     /** Night mode is on (dims the screen; the moon key is lit). */
     val night: Boolean = false,
+    /** PHONE selected: recent calls + favourites replace the media section. */
+    val phoneOpen: Boolean = false,
+    /** Current call (from the phone app's call notification), or null. */
+    val call: com.retro.vfdlauncher.data.phone.CallInfo? = null,
+    /** Latest calls from the call log; null while loading. */
+    val recents: List<com.retro.vfdlauncher.data.phone.RecentCall>? = null,
+    /** Why the recent-calls list is empty (no permission / phone app doesn't share its log). */
+    val recentsNote: String? = null,
+    val favorites: List<com.retro.vfdlauncher.data.phone.Favorite?> = List(6) { null },
 )
 
 /** Everything the home screen can do. */
@@ -144,6 +153,15 @@ class HomeActions(
     val onOpenMusicApp: () -> Unit = {},
     /** Moon key: switch night mode on/off until the next sunrise or sunset. */
     val onNight: () -> Unit = {},
+    val onPhone: () -> Unit = {},
+    /** Hold PHONE: choose the phone app (KEYPAD & CONTACTS / OPEN PHONE). */
+    val onPhoneLongPress: () -> Unit = {},
+    val onDial: (String) -> Unit = {},
+    val onFavorite: (Int) -> Unit = {},
+    val onFavoriteEdit: (Int) -> Unit = {},
+    val onAnswer: () -> Unit = {},
+    val onHangUp: () -> Unit = {},
+    val onOpenPhone: () -> Unit = {},
 )
 
 const val DESIGN_W = 1280f
@@ -186,8 +204,21 @@ fun HomeScreen(state: HomeState, actions: HomeActions) {
                     .background(Vfd.Reflection),
             )
             TopBar(state, actions, Modifier.offset(40.dp, 24.dp).size(1200.dp, 68.dp))
-            MainDisplay(state, actions, Modifier.offset(40.dp, 108.dp).size(780.dp, 300.dp))
-            if (state.source == Source.RADIO) {
+            if (state.phoneOpen) {
+                // Canvas "PHONE selected": recent calls, favourites, back / keypad.
+                RecentCallsPanel(state.recents, state.recentsNote, actions.onDial, Modifier.offset(40.dp, 108.dp).size(780.dp, 300.dp))
+                FavoritesRow(state.favorites, actions.onFavorite, actions.onFavoriteEdit, Modifier.offset(40.dp, 428.dp).size(780.dp, 156.dp))
+                PhoneBottomRow(
+                    if (state.source == Source.RADIO) "BACK TO RADIO" else "BACK TO MUSIC",
+                    actions.onPhone, actions.onOpenPhone,
+                    Modifier.offset(40.dp, 604.dp).size(780.dp, 84.dp),
+                )
+            } else {
+                MainDisplay(state, actions, Modifier.offset(40.dp, 108.dp).size(780.dp, 300.dp))
+            }
+            if (state.phoneOpen) {
+                // media rows are replaced above
+            } else if (state.source == Source.RADIO) {
                 PresetGrid(state, actions, Modifier.offset(40.dp, 428.dp).size(780.dp, 156.dp))
                 RadioControls(state, actions, Modifier.offset(40.dp, 604.dp).size(780.dp, 84.dp))
             } else {
@@ -196,6 +227,10 @@ fun HomeScreen(state: HomeState, actions: HomeActions) {
                 if (state.playlistsOpen) {
                     PlaylistsPanel(state, actions, Modifier.offset(40.dp, 108.dp).size(780.dp, 580.dp))
                 }
+            }
+            // During a call the call bar replaces the small control row (canvas: Call-Ringing/-Active/-Fallback).
+            state.call?.let { c ->
+                CallBar(c, actions.onAnswer, actions.onHangUp, actions.onOpenPhone, Modifier.offset(40.dp, 604.dp).size(780.dp, 84.dp))
             }
             val turn = state.nextTurn
             if (turn != null) {
@@ -214,10 +249,10 @@ fun HomeScreen(state: HomeState, actions: HomeActions) {
 @Composable
 private fun TopBar(state: HomeState, actions: HomeActions, modifier: Modifier) {
     Row(modifier, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            SourceTab("RADIO", VfdIcons.Radio, 196.dp, state.source == Source.RADIO,
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+            SourceTab("RADIO", VfdIcons.Radio, 196.dp, state.source == Source.RADIO && !state.phoneOpen,
                 { actions.onSource(Source.RADIO) }, { actions.onSourceLongPress(Source.RADIO) })
-            SourceTab("YT MUSIC", VfdIcons.Music, 232.dp, state.source == Source.MUSIC,
+            SourceTab("YT MUSIC", VfdIcons.Music, 232.dp, state.source == Source.MUSIC && !state.phoneOpen,
                 { actions.onSource(Source.MUSIC) }, { actions.onSourceLongPress(Source.MUSIC) })
             val indicators = if (state.source == Source.RADIO) {
                 val band = if (state.radio?.tuning?.band == Band.AM) "AM" else "FM"
@@ -225,7 +260,16 @@ private fun TopBar(state: HomeState, actions: HomeActions, modifier: Modifier) {
             } else {
                 if (state.music?.isPlaying == true) "STREAMING" else "STANDBY"
             }
-            BasicText(indicators, Modifier.padding(start = 14.dp), style = glow(Vfd.Teal, 20.sp, 3.sp, blur = 8f))
+            SourceTab("PHONE", VfdIcons.Phone, 156.dp, state.phoneOpen, actions.onPhone, actions.onPhoneLongPress)
+            BasicText(
+                indicators,
+                Modifier
+                    .padding(start = 14.dp)
+                    .weight(1f, fill = false),
+                style = glow(Vfd.Teal, 20.sp, 3.sp, blur = 8f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
             MoonKey(state.night, actions.onNight)
@@ -695,7 +739,7 @@ private fun ToggleButton(word: String, icon: ImageVector, on: Boolean, onClick: 
 }
 
 /** Soft halo outside a key (the canvas' box-shadow glow). */
-private fun Modifier.halo(color: Color, radius: Dp, spread: Dp): Modifier = drawBehind {
+internal fun Modifier.halo(color: Color, radius: Dp, spread: Dp): Modifier = drawBehind {
     val p = spread.toPx()
     drawRoundRect(
         color = color,

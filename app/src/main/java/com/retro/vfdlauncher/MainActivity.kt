@@ -38,6 +38,9 @@ import com.retro.vfdlauncher.ui.picker.AppDrawer
 import com.retro.vfdlauncher.ui.picker.AppPicker
 import com.retro.vfdlauncher.ui.picker.PlaylistEditor
 import com.retro.vfdlauncher.ui.picker.SessionInspector
+import com.retro.vfdlauncher.ui.picker.FavoriteEditor
+import com.retro.vfdlauncher.data.phone.PhoneCalls
+import androidx.lifecycle.lifecycleScope
 import com.retro.vfdlauncher.ui.picker.LauncherSettings
 import com.retro.vfdlauncher.ui.picker.SettingsActions
 import com.retro.vfdlauncher.ui.picker.updateLabel
@@ -68,6 +71,28 @@ class MainActivity : ComponentActivity() {
             if (!vm.status.value.isDefaultHome) safeStart(Intent(Settings.ACTION_HOME_SETTINGS))
         }
 
+    /** PHONE: ask for call-log (recent calls) and call (favourites) access the first time it opens. */
+    private val phonePermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.loadRecents() }
+
+    private fun openPhone() {
+        vm.togglePhone()
+        if (vm.phoneOpen.value) {
+            val missing = listOf(Manifest.permission.READ_CALL_LOG, Manifest.permission.CALL_PHONE)
+                .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+            val prefs = getSharedPreferences("home", MODE_PRIVATE)
+            if (missing.isNotEmpty() && !prefs.getBoolean("phoneAsked", false)) {
+                prefs.edit().putBoolean("phoneAsked", true).apply()
+                phonePermissions.launch(missing.toTypedArray())
+            }
+        }
+    }
+
+    /** Press the call notification's own button; without one, open the phone app instead. */
+    private fun callButton(intent: android.app.PendingIntent?) {
+        if (!PhoneCalls.press(intent)) lifecycleScope.launch { launchSlot(Slot.PHONE) }
+    }
+
     private fun makeDefaultLauncher() {
         val request = vm.requestHomeRoleIntent()
         if (request == null || runCatching { homeRole.launch(request) }.isFailure) {
@@ -87,6 +112,7 @@ class MainActivity : ComponentActivity() {
                 vm.closeInspector()
                 vm.closeDrawer()
                 vm.closeSettings()
+                vm.closeFavoriteEditor()
                 vm.closePlaylistEditor()
                 vm.closePlaylists()
             }
@@ -113,6 +139,12 @@ class MainActivity : ComponentActivity() {
             val update by vm.updateState.collectAsStateWithLifecycle()
             val settingsOpen by vm.settingsOpen.collectAsStateWithLifecycle()
             val night by vm.night.collectAsStateWithLifecycle()
+            val phoneOpen by vm.phoneOpen.collectAsStateWithLifecycle()
+            val call by vm.call.collectAsStateWithLifecycle()
+            val recents by vm.recents.collectAsStateWithLifecycle()
+            val recentsNote by vm.recentsNote.collectAsStateWithLifecycle()
+            val favoriteContacts by vm.favoriteContacts.collectAsStateWithLifecycle()
+            val favoriteEditor by vm.favoriteEditor.collectAsStateWithLifecycle()
             val status by vm.status.collectAsStateWithLifecycle()
             val playlists by vm.playlists.collectAsStateWithLifecycle()
             val currentPlaylist by vm.currentPlaylist.collectAsStateWithLifecycle()
@@ -157,6 +189,14 @@ class MainActivity : ComponentActivity() {
                 onPlaylistEdit = vm::editPlaylist,
                 onOpenMusicApp = { scope.launch { launchSlot(Slot.MUSIC) } },
                 onNight = vm::toggleNight,
+                onPhone = ::openPhone,
+                onPhoneLongPress = { vm.openPicker(Slot.PHONE) },
+                onDial = { number -> safeStart(vm.phoneRepo.callIntent(number)) },
+                onFavorite = { i -> favoriteContacts.getOrNull(i)?.let { safeStart(vm.phoneRepo.callIntent(it.number)) } },
+                onFavoriteEdit = vm::editFavorite,
+                onAnswer = { callButton(call?.answer) },
+                onHangUp = { callButton(call?.hangUp) },
+                onOpenPhone = { scope.launch { launchSlot(Slot.PHONE) } },
             )
 
             CompositionLocalProvider(LocalSpectrumLevels provides vm.spectrum.levels) { Box {
@@ -167,6 +207,11 @@ class MainActivity : ComponentActivity() {
                         currentPlaylist = currentPlaylist,
                         playlistsOpen = playlistsOpen,
                         night = night.isNight,
+                        phoneOpen = phoneOpen,
+                        call = call,
+                        recents = recents,
+                        recentsNote = recentsNote,
+                        favorites = favoriteContacts,
                     ),
                     actions,
                 )
@@ -174,7 +219,7 @@ class MainActivity : ComponentActivity() {
                 val d = drawer
                 val text = inspector
                 val edit = playlistEditor
-                if (p != null || d != null || text != null || edit != null || settingsOpen) {
+                if (p != null || d != null || text != null || edit != null || settingsOpen || favoriteEditor != null) {
                     ScaledDesignCanvas {
                         when {
                             p != null -> AppPicker(
@@ -201,6 +246,15 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = vm::closeDrawer,
                             )
                             text != null -> SessionInspector(text, vm::closeInspector)
+                            favoriteEditor != null -> favoriteEditor?.let { i ->
+                                FavoriteEditor(
+                                    index = i,
+                                    current = favoriteContacts.getOrNull(i),
+                                    onSave = { vm.saveFavorite(i, it) },
+                                    onClear = { vm.saveFavorite(i, null) },
+                                    onDismiss = vm::closeFavoriteEditor,
+                                )
+                            }
                             settingsOpen -> LauncherSettings(
                                 status = status,
                                 night = night,

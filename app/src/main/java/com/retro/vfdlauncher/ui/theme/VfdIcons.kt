@@ -74,6 +74,13 @@ object VfdIcons {
         "M14 4h6v6", "M20 4 11 13", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
     )
     val Close = icon("close", 2.6f, "M6 6l12 12M18 6 6 18")
+    // ---- phone (canvas page "Phone calls")
+    private const val HANDSET = "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"
+    val Phone = icon("phone", 1.8f, HANDSET)
+    val Ringing = icon("ringing", 1.8f, HANDSET, "M15 3a6 6 0 0 1 6 6M15 6.5a2.5 2.5 0 0 1 2.5 2.5")
+    val HangUp = icon("hangup", 2f, "M3 14.5c5-4.7 13-4.7 18 0l-2.3 2.6-3.4-1.5v-2.4a9 9 0 0 0-5.6 0v2.4l-3.4 1.5z")
+    val CallIn = icon("callin", 2f, "M17 7 7 17", "M15 17h-6v-6")
+    val CallOut = icon("callout", 2f, "M7 17 17 7", "M9 7h6v6")
     val Moon = icon("moon", 2f, "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z")
     val Heart = icon("heart", 2f, "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z")
     val Minus = icon("minus", 2.4f, "M5 12h14")

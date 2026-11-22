@@ -22,6 +22,8 @@ enum class Slot(val key: String, val label: String) {
     MUSIC("music", "MUSIC"),
     CAMERA("camera", "CAMERA"),
     SETTINGS("settings", "SETTINGS"),
+    /** Phone app for KEYPAD & CONTACTS / OPEN PHONE (ATOTO's Bluetooth phone). */
+    PHONE("phone", "PHONE"),
 }
 
 data class AppEntry(
@@ -114,8 +116,9 @@ class AppRepository(private val context: Context) {
             Slot.MUSIC -> listOf("com.google.android.apps.youtube.music", "yt music", "spotify", "music", "deezer", "tidal")
             Slot.CAMERA -> listOf("avm", "dvr", "reverse", "backcar", "rearview", "camera")
             Slot.SETTINGS -> return null // handled by the system Settings intent
+            Slot.PHONE -> listOf("btphone", "bluetooth phone", "bt phone", "bluetooth", "dialer", "phone", "telefoon")
         }
-        val entries = allEntries(includeHidden = slot == Slot.ANDROID_AUTO || slot == Slot.CAMERA || slot == Slot.RADIO)
+        val entries = allEntries(includeHidden = slot == Slot.ANDROID_AUTO || slot == Slot.CAMERA || slot == Slot.RADIO || slot == Slot.PHONE)
         fun score(e: AppEntry): Int {
             val hay = (e.component.packageName + " " + e.label).lowercase(Locale.ROOT)
             val idx = words.indexOfFirst { it in hay }
@@ -134,6 +137,7 @@ class AppRepository(private val context: Context) {
             slot == Slot.CAMERA -> Intent(MediaStore.INTENT_ACTION_STILL_IMAGE_CAMERA)
             slot == Slot.MUSIC -> Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MUSIC)
             slot == Slot.MAPS -> Intent.makeMainSelectorActivity(Intent.ACTION_MAIN, Intent.CATEGORY_APP_MAPS)
+            slot == Slot.PHONE -> Intent(Intent.ACTION_DIAL)
             else -> null
         }
         return intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
