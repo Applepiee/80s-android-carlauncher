@@ -39,7 +39,15 @@ fun rememberWeatherClock(): State<Float> =
  * car with turning rays and breeze streaks drift past the nose. Drawn in teal like the canvas.
  */
 @Composable
-fun RoofWeatherFx(fx: RoofFx, roofDown: Boolean, clock: State<Float>, modifier: Modifier, color: Color = Vfd.Teal) {
+fun RoofWeatherFx(
+    fx: RoofFx,
+    roofDown: Boolean,
+    clock: State<Float>,
+    modifier: Modifier,
+    color: Color = Vfd.Teal,
+    /** After sunset the sun becomes a moon. */
+    night: Boolean = false,
+) {
     Canvas(modifier) {
         val t = clock.value
         val sx = size.width / 120f
@@ -50,7 +58,7 @@ fun RoofWeatherFx(fx: RoofFx, roofDown: Boolean, clock: State<Float>, modifier: 
             RoofFx.RAIN -> drawRain(t, ::p, w, color, if (roofDown) ROOF_DOWN_TOP else ROOF_UP_TOP)
             RoofFx.SPEED_RAIN -> drawSpeedRain(t, ::p, w, color)
             RoofFx.SUN -> {
-                drawSun(t, ::p, w, color)
+                if (night) drawMoon(t, ::p, w, color) else drawSun(t, ::p, w, color)
                 drawBreeze(t, ::p, w, color)
             }
             RoofFx.BREEZE -> drawBreeze(t, ::p, w, color)
@@ -212,6 +220,31 @@ private fun DrawScope.drawSun(t: Float, p: (Float, Float) -> Offset, w: Float, c
         val ca = cos(a)
         val sa = sin(a)
         drawLine(c, p(cx + ca * (r + 1.4f), cy + sa * (r + 1.4f)), p(cx + ca * (r + 3f), cy + sa * (r + 3f)), w, StrokeCap.Round)
+    }
+}
+
+/** Night: a crescent moon drifting slowly over the car, with two twinkling stars. */
+private fun DrawScope.drawMoon(t: Float, p: (Float, Float) -> Offset, w: Float, color: Color) {
+    val arcT = (t % 60f) / 60f
+    val angle = PI * (1 - arcT)
+    val cx = 60f + 46f * cos(angle).toFloat()
+    val cy = 12f - 8f * sin(angle).toFloat()
+    val fade = minOf(1f, arcT / 0.08f, (1f - arcT) / 0.08f)
+    val r = 3.4f
+    val path = androidx.compose.ui.graphics.Path().apply {
+        // Crescent: outer circle arc minus an offset inner arc.
+        val o = p(cx, cy)
+        val rad = r * size.width / 120f
+        addOval(androidx.compose.ui.geometry.Rect(o.x - rad, o.y - rad, o.x + rad, o.y + rad))
+        val cut = androidx.compose.ui.graphics.Path().apply {
+            addOval(androidx.compose.ui.geometry.Rect(o.x - rad + rad * 0.9f, o.y - rad - rad * 0.35f, o.x + rad + rad * 0.9f, o.y + rad - rad * 0.35f))
+        }
+        op(this, cut, androidx.compose.ui.graphics.PathOperation.Difference)
+    }
+    drawPath(path, color.copy(alpha = fade))
+    for ((sx, sy, ph) in listOf(Triple(18f, 4f, 0f), Triple(100f, 6f, 1.7f))) {
+        val a = (0.45f + 0.45f * sin(t * 1.6f + ph)) * 0.9f
+        drawCircle(color.copy(alpha = a), 0.7f * w, p(sx, sy))
     }
 }
 

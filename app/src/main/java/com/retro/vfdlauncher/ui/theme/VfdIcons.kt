@@ -74,6 +74,7 @@ object VfdIcons {
         "M14 4h6v6", "M20 4 11 13", "M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5",
     )
     val Close = icon("close", 2.6f, "M6 6l12 12M18 6 6 18")
+    val Moon = icon("moon", 2f, "M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z")
     val Heart = icon("heart", 2f, "M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z")
     val Minus = icon("minus", 2.4f, "M5 12h14")
     val Plus = icon("plus", 2.4f, "M5 12h14M12 5v14")

@@ -33,6 +33,7 @@ import com.retro.vfdlauncher.R
 import com.retro.vfdlauncher.data.audio.VolumeRepository
 import com.retro.vfdlauncher.data.media.MediaRepository
 import kotlinx.coroutines.flow.combine
+import com.retro.vfdlauncher.data.night.NightMode
 import kotlinx.coroutines.launch
 
 /**
@@ -66,11 +67,19 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
         lifecycleRegistry.currentState = Lifecycle.State.RESUMED
 
         lifecycleScope.launch {
-            combine(OverlayBus.launcherVisible, OverlayBus.crtWanted) { home, crtWanted -> home to crtWanted }
-                .collect { (home, crtWanted) ->
-                    if (!home) media.start() // picks up media access granted since the service started
-                    render(showBar = !home, showCrt = !home && crtWanted)
-                }
+            combine(OverlayBus.launcherVisible, OverlayBus.crtWanted, NightMode.state) { home, crtWanted, night ->
+                Triple(home, crtWanted, night.dim)
+            }.collect { (home, crtWanted, dim) ->
+                if (!home) media.start() // picks up media access granted since the service started
+                render(showBar = !home, crt = !home && crtWanted, dim = if (home) 0f else dim)
+            }
+        }
+        // Night mode also flips while the launcher is in the background (sunset during a drive).
+        lifecycleScope.launch {
+            while (true) {
+                NightMode.update(this@OverlayService)
+                kotlinx.coroutines.delay(60_000L - System.currentTimeMillis() % 60_000L + 300L)
+            }
         }
     }
 
@@ -87,18 +96,20 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
-        render(showBar = false, showCrt = false)
+        render(showBar = false, crt = false, dim = 0f)
         media.stop()
         volume.stop()
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         super.onDestroy()
     }
 
-    private fun render(showBar: Boolean, showCrt: Boolean) {
+    private fun render(showBar: Boolean, crt: Boolean, dim: Float) {
         if (!Settings.canDrawOverlays(this)) return
-        // CRT first so the bar sits above it.
-        if (showCrt && crt == null) crt = CrtView(this).also { wm.addView(it, crtParams()) }
-        if (!showCrt) crt?.let { runCatching { wm.removeView(it) }; crt = null }
+        // One shade window for the CRT look and the night dimming; added first so the bar sits above it.
+        val showCrt = crt || dim > 0f
+        (this.crt as? CrtView)?.configure(crt, dim)
+        if (showCrt && this.crt == null) this.crt = CrtView(this).also { it.configure(crt, dim); wm.addView(it, crtParams()) }
+        if (!showCrt) this.crt?.let { runCatching { wm.removeView(it) }; this.crt = null }
         if (showBar && bar == null) bar = createBar().also { wm.addView(it, barParams().also { lp -> barLp = lp }) }
         if (!showBar) bar?.let { runCatching { wm.removeView(it) }; bar = null }
         if (showBar && showCrt) bar?.let {
@@ -122,6 +133,7 @@ class OverlayService : Service(), LifecycleOwner, SavedStateRegistryOwner {
                         onBack = ::goBack,
                         onDrag = ::dragBar,
                         onDragEnd = ::dropBar,
+                        onNight = { NightMode.toggle(this@OverlayService) },
                     )
                 }
             },

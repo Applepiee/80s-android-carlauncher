@@ -60,6 +60,7 @@ fun FloatingBar(
     /** Raw finger movement in screen pixels while the grip is dragged. */
     onDrag: (dx: Float, dy: Float) -> Unit,
     onDragEnd: () -> Unit,
+    onNight: () -> Unit = {},
 ) {
     CompositionLocalProvider(LocalDensity provides Density(scale, fontScale = 1f)) {
         var expanded by remember { mutableStateOf(true) }
@@ -69,6 +70,7 @@ fun FloatingBar(
         val pkg = np?.packageName
         val playing = np?.isPlaying == true
         val radio = np?.isRadio == true
+        val night by com.retro.vfdlauncher.data.night.NightMode.state.collectAsState()
 
         Column(
             Modifier
@@ -110,6 +112,14 @@ fun FloatingBar(
                 RailButton(56.dp, 56.dp, BorderStrong, "Volume down", volume::down) {
                     GlowIcon(VfdIcons.Minus, Vfd.Teal, 22.dp, glow = false)
                 }
+            }
+            // Night mode on/off (lit amber at night).
+            RailButton(
+                56.dp, 44.dp, if (night.isNight) Vfd.Amber else null,
+                if (night.isNight) "Night mode off" else "Night mode on", onNight,
+                fill = if (night.isNight) Vfd.Amber.copy(alpha = 0.12f) else Color.Transparent,
+            ) {
+                GlowIcon(VfdIcons.Moon, if (night.isNight) Vfd.Amber else Vfd.Teal.copy(alpha = 0.8f), 22.dp, glow = false)
             }
             // Fold arrow: points up when it will fold the rail, down when it will open it.
             RailButton(56.dp, 36.dp, null, if (expanded) "Hide controls" else "Show controls", { expanded = !expanded }) {

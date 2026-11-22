@@ -12,6 +12,7 @@ import com.retro.vfdlauncher.data.apps.Slot
 import com.retro.vfdlauncher.data.audio.AudioSpectrum
 import android.app.role.RoleManager
 import android.os.Build
+import com.retro.vfdlauncher.data.night.NightMode
 import com.retro.vfdlauncher.data.update.UpdateState
 import com.retro.vfdlauncher.overlay.RailAccessibilityService
 import com.retro.vfdlauncher.ui.picker.LauncherStatus
@@ -112,7 +113,19 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private var weatherJob: Job? = null
 
+    val night = NightMode.state
+
     init {
+        // Night mode: new sunrise/sunset with every forecast, and a re-check every minute.
+        viewModelScope.launch {
+            weather.collect { w -> if (w != null) NightMode.setSun(getApplication(), w.sun, w.utcOffsetSeconds) }
+        }
+        viewModelScope.launch {
+            while (isActive) {
+                NightMode.update(getApplication())
+                delay(60_000L - System.currentTimeMillis() % 60_000L + 200L)
+            }
+        }
         refreshSourcePackages()
         // Follow the audio: when a source starts playing elsewhere (steering wheel, app), switch to it.
         viewModelScope.launch {
@@ -203,6 +216,14 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         _settingsOpen.value = true
     }
 
+    fun toggleNight() = NightMode.toggle(getApplication())
+
+    fun changeNightDim(delta: Float) {
+        val app = getApplication<Application>()
+        NightMode.setDimLevel(app, ((NightMode.dimLevel(app) + delta) * 10).let { Math.round(it) / 10f })
+        refreshStatus()
+    }
+
     fun closeSettings() {
         _settingsOpen.value = false
     }
@@ -210,7 +231,10 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     /** Re-read what Android has granted; called on resume (the user may come back from Settings). */
     fun refreshStatus() {
         val app = getApplication<Application>()
+        NightMode.update(app)
         _status.value = LauncherStatus(
+            backlight = NightMode.canChangeBacklight(app),
+            nightDim = NightMode.dimLevel(app),
             isDefaultHome = isDefaultHome(app),
             mediaAccess = mediaRepo.checkAccess(),
             overlay = android.provider.Settings.canDrawOverlays(app),

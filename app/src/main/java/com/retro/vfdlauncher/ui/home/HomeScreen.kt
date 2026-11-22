@@ -107,6 +107,8 @@ data class HomeState(
     /** Index of the playlist last started from the launcher, or -1. */
     val currentPlaylist: Int = -1,
     val playlistsOpen: Boolean = false,
+    /** Night mode is on (dims the screen; the moon key is lit). */
+    val night: Boolean = false,
 )
 
 /** Everything the home screen can do. */
@@ -140,6 +142,8 @@ class HomeActions(
     /** Long-press a playlist key (or PLAYLISTS): edit that slot. */
     val onPlaylistEdit: (Int) -> Unit = {},
     val onOpenMusicApp: () -> Unit = {},
+    /** Moon key: switch night mode on/off until the next sunrise or sunset. */
+    val onNight: () -> Unit = {},
 )
 
 const val DESIGN_W = 1280f
@@ -197,7 +201,7 @@ fun HomeScreen(state: HomeState, actions: HomeActions) {
             if (turn != null) {
                 NextTurnPanel(turn, { actions.onSlot(Slot.MAPS) }, Modifier.offset(860.dp, 108.dp).size(380.dp, 96.dp))
             } else {
-                WeatherOrRoofPanel(state.weather, Modifier.offset(860.dp, 108.dp).size(380.dp, 96.dp))
+                WeatherOrRoofPanel(state.weather, state.night, Modifier.offset(860.dp, 108.dp).size(380.dp, 96.dp))
             }
             AppGrid(actions, Modifier.offset(860.dp, 220.dp).width(380.dp))
             VolumePanel(state.volume, actions, Modifier.offset(860.dp, 604.dp).size(380.dp, 84.dp))
@@ -223,7 +227,24 @@ private fun TopBar(state: HomeState, actions: HomeActions, modifier: Modifier) {
             }
             BasicText(indicators, Modifier.padding(start = 14.dp), style = glow(Vfd.Teal, 20.sp, 3.sp, blur = 8f))
         }
-        Clock()
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(22.dp)) {
+            MoonKey(state.night, actions.onNight)
+            Clock()
+        }
+    }
+}
+
+/** Night mode on/off; lit amber while night mode is on. */
+@Composable
+private fun MoonKey(night: Boolean, onClick: () -> Unit) {
+    VfdButton(
+        Modifier.size(60.dp),
+        border = if (night) Vfd.Amber else BorderStrong,
+        fill = if (night) Vfd.Amber.copy(alpha = 0.15f) else Color.Transparent,
+        onClickLabel = if (night) "Night mode off" else "Night mode on",
+        onClick = onClick,
+    ) {
+        GlowIcon(VfdIcons.Moon, if (night) Vfd.Amber else Vfd.Teal, 28.dp, glow = night)
     }
 }
 
@@ -851,7 +872,7 @@ private fun NextTurnPanel(turn: NextTurn, onOpen: () -> Unit, modifier: Modifier
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun WeatherOrRoofPanel(weather: Weather?, modifier: Modifier) {
+private fun WeatherOrRoofPanel(weather: Weather?, night: Boolean, modifier: Modifier) {
     val roof = weather?.roof
     var showWeather by remember { mutableStateOf(false) }
     if (roof == null) {
@@ -889,7 +910,7 @@ private fun WeatherOrRoofPanel(weather: Weather?, modifier: Modifier) {
     ) {
         when {
             showWeather -> WeatherPanel(weather, Modifier.fillMaxSize())
-            else -> TopDownMeter(ROOF_DEMOS.getOrNull(demo) ?: live, Modifier.fillMaxSize())
+            else -> TopDownMeter(ROOF_DEMOS.getOrNull(demo) ?: live, night, Modifier.fillMaxSize())
         }
     }
 }
@@ -905,7 +926,7 @@ private val ROOF_DEMOS = listOf(
 )
 
 @Composable
-private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
+private fun TopDownMeter(v: RoofVerdict, night: Boolean, modifier: Modifier) {
     val color = when (v.tier) {
         RoofTier.GOOD -> Vfd.Teal
         RoofTier.OK -> Vfd.Amber
@@ -927,9 +948,9 @@ private fun TopDownMeter(v: RoofVerdict, modifier: Modifier) {
             // Phosphor glow: blurred copies under the line art and the animated weather.
             val glowLayer = Modifier.fillMaxSize().blur(4.dp, BlurredEdgeTreatment.Unbounded)
             Image(car, null, glowLayer, alpha = 0.7f)
-            RoofWeatherFx(v.fx, v.roofDown, clock, glowLayer)
+            RoofWeatherFx(v.fx, v.roofDown, clock, glowLayer, night = night)
             Image(car, null, Modifier.fillMaxSize())
-            RoofWeatherFx(v.fx, v.roofDown, clock, Modifier.fillMaxSize())
+            RoofWeatherFx(v.fx, v.roofDown, clock, Modifier.fillMaxSize(), night = night)
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(7.dp)) {
             // Title on its own line; the score sits at the end of its bar, like a meter reading.

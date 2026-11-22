@@ -42,6 +42,9 @@ import com.retro.vfdlauncher.ui.picker.LauncherSettings
 import com.retro.vfdlauncher.ui.picker.SettingsActions
 import com.retro.vfdlauncher.ui.picker.updateLabel
 import com.retro.vfdlauncher.overlay.RailAccessibilityService
+import com.retro.vfdlauncher.data.night.NightMode
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -109,6 +112,7 @@ class MainActivity : ComponentActivity() {
             val favorites by vm.favorites.collectAsStateWithLifecycle()
             val update by vm.updateState.collectAsStateWithLifecycle()
             val settingsOpen by vm.settingsOpen.collectAsStateWithLifecycle()
+            val night by vm.night.collectAsStateWithLifecycle()
             val status by vm.status.collectAsStateWithLifecycle()
             val playlists by vm.playlists.collectAsStateWithLifecycle()
             val currentPlaylist by vm.currentPlaylist.collectAsStateWithLifecycle()
@@ -152,6 +156,7 @@ class MainActivity : ComponentActivity() {
                 },
                 onPlaylistEdit = vm::editPlaylist,
                 onOpenMusicApp = { scope.launch { launchSlot(Slot.MUSIC) } },
+                onNight = vm::toggleNight,
             )
 
             CompositionLocalProvider(LocalSpectrumLevels provides vm.spectrum.levels) { Box {
@@ -161,6 +166,7 @@ class MainActivity : ComponentActivity() {
                         playlists = playlists,
                         currentPlaylist = currentPlaylist,
                         playlistsOpen = playlistsOpen,
+                        night = night.isNight,
                     ),
                     actions,
                 )
@@ -197,6 +203,7 @@ class MainActivity : ComponentActivity() {
                             text != null -> SessionInspector(text, vm::closeInspector)
                             settingsOpen -> LauncherSettings(
                                 status = status,
+                                night = night,
                                 updateLabel = updateLabel(update, vm.updater.currentVersion).first,
                                 a = SettingsActions(
                                     onMakeDefault = ::makeDefaultLauncher,
@@ -208,6 +215,9 @@ class MainActivity : ComponentActivity() {
                                     },
                                     onBackButton = { safeStart(RailAccessibilityService.settingsIntent()) },
                                     onResetRail = { OverlayService.resetRailPosition(this@MainActivity) },
+                                    onBacklight = { safeStart(NightMode.backlightPermissionIntent(this@MainActivity)) },
+                                    onNightDim = vm::changeNightDim,
+                                    onNightToggle = vm::toggleNight,
                                     onUpdate = { vm.onUpdateKey()?.let { safeStart(it) } },
                                     onAndroidSettings = { safeStart(Intent(Settings.ACTION_SETTINGS)) },
                                     onDismiss = vm::closeSettings,
@@ -222,6 +232,13 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                }
+                if (night.dim > 0f) {
+                    androidx.compose.foundation.layout.Box(
+                        androidx.compose.ui.Modifier
+                            .fillMaxSize()
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = night.dim)),
+                    )
                 }
             } }
         }

@@ -37,6 +37,10 @@ data class LauncherStatus(
     val overlay: Boolean = false,
     val backButton: Boolean = false,
     val version: String = "",
+    /** "Modify system settings" granted: night mode can lower the real backlight. */
+    val backlight: Boolean = false,
+    /** Black layer strength at night, 0..0.8. */
+    val nightDim: Float = 0.6f,
 )
 
 /** Actions of the launcher settings sheet. */
@@ -46,6 +50,9 @@ class SettingsActions(
     val onOverlay: () -> Unit,
     val onBackButton: () -> Unit,
     val onResetRail: () -> Unit,
+    val onBacklight: () -> Unit = {},
+    val onNightDim: (delta: Float) -> Unit = {},
+    val onNightToggle: () -> Unit = {},
     val onUpdate: () -> Unit,
     val onAndroidSettings: () -> Unit,
     val onDismiss: () -> Unit,
@@ -56,7 +63,12 @@ class SettingsActions(
  * needs, the floating rail, updates, and a way through to Android's own settings.
  */
 @Composable
-fun LauncherSettings(status: LauncherStatus, updateLabel: String, a: SettingsActions) {
+fun LauncherSettings(
+    status: LauncherStatus,
+    updateLabel: String,
+    a: SettingsActions,
+    night: com.retro.vfdlauncher.data.night.NightState = com.retro.vfdlauncher.data.night.NightState(),
+) {
     Box(
         Modifier
             .fillMaxSize()
@@ -117,6 +129,14 @@ fun LauncherSettings(status: LauncherStatus, updateLabel: String, a: SettingsAct
                     button = if (status.backButton) null else "TURN ON",
                     onClick = a.onBackButton,
                 )
+                NightDimRow(status, night, a)
+                SettingRow(
+                    "NIGHT BACKLIGHT",
+                    if (status.backlight) "SCREEN GOES TO ITS LOWEST BRIGHTNESS AT NIGHT" else "ALLOW \"MODIFY SYSTEM SETTINGS\" TO DIM THE BACKLIGHT",
+                    ok = status.backlight,
+                    button = if (status.backlight) null else "ALLOW",
+                    onClick = a.onBacklight,
+                )
                 SettingRow(
                     "CONTROLS POSITION",
                     "DRAG THE GRIP ON TOP OF THE CONTROLS TO MOVE THEM",
@@ -133,6 +153,35 @@ fun LauncherSettings(status: LauncherStatus, updateLabel: String, a: SettingsAct
                 )
             }
         }
+    }
+}
+
+/** NIGHT DIM: strength of the black layer (0-80 %), plus switching night mode on/off now. */
+@Composable
+private fun NightDimRow(status: LauncherStatus, night: com.retro.vfdlauncher.data.night.NightState, a: SettingsActions) {
+    val clock = java.time.format.DateTimeFormatter.ofPattern("HH:mm")
+    val detail = buildString {
+        append(if (night.isNight) "NIGHT NOW" else "DAY NOW")
+        if (night.manual) append(" (MANUAL)")
+        night.nextSwitch?.let { append(" · AUTO SWITCH ${it.format(clock)}") }
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .height(76.dp)
+            .border(1.dp, Vfd.Teal.copy(alpha = 0.25f), RoundedCornerShape(10.dp))
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(14.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            BasicText("NIGHT DIM ${Math.round(status.nightDim * 100)}%", style = glow(Vfd.Teal, 20.sp, 3.sp, blur = 4f), maxLines = 1)
+            BasicText(detail, style = glow(Vfd.Teal.copy(alpha = 0.75f), 18.sp, 1.sp, blur = 0f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        SettingButton("−", Vfd.Teal) { a.onNightDim(-0.1f) }
+        SettingButton("+", Vfd.Teal) { a.onNightDim(0.1f) }
+        SettingButton(if (night.isNight) "DAY NOW" else "NIGHT NOW", Vfd.Amber, a.onNightToggle)
     }
 }
 
