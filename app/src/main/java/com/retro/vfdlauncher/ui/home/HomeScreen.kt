@@ -934,40 +934,22 @@ private fun WeatherOrRoofPanel(weather: Weather?, night: Boolean, modifier: Modi
     val live = remember(roof, minute) {
         RoofMeter.evaluate(roof, LocalDateTime.now(ZoneOffset.ofTotalSeconds(roof.utcOffsetSeconds)))
     }
-    // Long-press: show off the three canvas cases for 8 s, then back to the live forecast.
-    var demo by remember { mutableStateOf(-1) }
-    LaunchedEffect(demo) {
-        if (demo >= 0) {
-            delay(8_000)
-            demo = -1
-        }
-    }
     Box(
-        modifier.combinedClickable(
+        modifier.clickable(
             interactionSource = remember { MutableInteractionSource() },
             indication = null,
-            onLongClickLabel = "Show demo weather",
-            onLongClick = { showWeather = false; demo = (demo + 1) % ROOF_DEMOS.size },
             onClickLabel = "Switch between top-down meter and weather",
-            onClick = { demo = -1; showWeather = !showWeather },
+            onClick = { showWeather = !showWeather },
         ),
     ) {
         when {
             showWeather -> WeatherPanel(weather, Modifier.fillMaxSize())
-            else -> TopDownMeter(ROOF_DEMOS.getOrNull(demo) ?: live, night, Modifier.fillMaxSize())
+            else -> TopDownMeter(live, night, Modifier.fillMaxSize())
         }
     }
 }
 
 private val RoofRed = Color(0xFFFF6A4D)
-
-/** The canvas cases plus the light-rain middle, for the long-press demo. */
-private val ROOF_DEMOS = listOf(
-    RoofVerdict(9, 24, "GO TOPLESS!", roofDown = true, tier = RoofTier.GOOD),
-    RoofVerdict(6, 14, "TOP DOWN, HEATER ON", roofDown = true, tier = RoofTier.OK, fx = RoofFx.BREEZE),
-    RoofVerdict(5, 22, "SPEED KEEPS YOU DRY", roofDown = true, tier = RoofTier.OK, fx = RoofFx.SPEED_RAIN, detail = "RAIN ENDS 18:30"),
-    RoofVerdict(2, 11, "ROOF UP · RAIN 17:40", roofDown = false, tier = RoofTier.BAD, fx = RoofFx.RAIN),
-)
 
 @Composable
 private fun TopDownMeter(v: RoofVerdict, night: Boolean, modifier: Modifier) {
@@ -1115,7 +1097,7 @@ private fun AppGrid(actions: HomeActions, modifier: Modifier) {
             GridButton("CAMERA", VfdIcons.Camera, Modifier.weight(1f),
                 { actions.onSlot(Slot.CAMERA) }, { actions.onSlotLongPress(Slot.CAMERA) })
             GridButton("SETTINGS", VfdIcons.Settings, Modifier.weight(1f),
-                { actions.onSlot(Slot.SETTINGS) }, { actions.onSlotLongPress(Slot.SETTINGS) })
+                { actions.onSlot(Slot.SETTINGS) }, null) // always the launcher's own settings
         }
     }
 }

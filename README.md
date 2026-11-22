@@ -36,9 +36,11 @@ nothing beyond AndroidX, so it is ready right after the unit wakes from sleep.
   notification: the arrow, distance, street and arrival time. Tap the card to open Maps.
 - **TOP-DOWN SCORE.** When you're not navigating, the same card rates from 0 to 10 whether the roof can go down. It
   draws the MR2 with the roof up or down, with animated rain, sun and wind. Tap the card to see the plain weather
-  instead. Long-press it for a demo of each case.
+  instead.
 - **App keys.**
-  - MAPS, ANDROID AUTO, CAMERA and SETTINGS are detected automatically. Long-press a key to choose a different app.
+  - MAPS, ANDROID AUTO and CAMERA are detected automatically. Long-press a key to choose a different app.
+  - SETTINGS opens the launcher's own settings (permissions, CRT effect, night mode). Android's settings are in the
+    app drawer.
     The picker can also show hidden system activities, which is where head units often keep the Android Auto app.
   - **APPS** opens the app drawer. Long-press an app there to pin it to the favourites row at the top.
 - **Volume and clock.** Volume is a 20-segment media-volume bar that follows the unit's knob. The clock follows
