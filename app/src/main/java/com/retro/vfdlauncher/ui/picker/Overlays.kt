@@ -220,7 +220,7 @@ fun AppDrawer(
 }
 
 /** Text of the drawer's UPDATE key, and whether it should stand out (amber). */
-private fun updateLabel(st: UpdateState, current: String): Pair<String, Boolean> = when (st) {
+internal fun updateLabel(st: UpdateState, current: String): Pair<String, Boolean> = when (st) {
     UpdateState.Idle -> "UPDATE · v$current" to false
     UpdateState.Checking -> "CHECKING…" to false
     is UpdateState.UpToDate -> "UP TO DATE · v${st.versionName}" to false

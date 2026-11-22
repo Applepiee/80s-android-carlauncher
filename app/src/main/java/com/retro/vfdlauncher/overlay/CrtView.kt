@@ -32,11 +32,28 @@ class CrtView(context: Context) : FrameLayout(context) {
 
     private val tube = TubeLayer(context)
     private val band = RollBand(context)
+    private val dimLayer = View(context)
     private var roll: ObjectAnimator? = null
+    private var crtOn = true
 
     init {
         addView(tube, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
         addView(band, LayoutParams(LayoutParams.MATCH_PARENT, 0))
+        addView(dimLayer, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
+    }
+
+    /**
+     * This window is also the night-mode shade over other apps (Android blocks touches through
+     * two stacked see-through windows of one app, so CRT and dimming share one window).
+     * [dim] is the wanted darkening, 0..0.8; the window itself is at alpha 0.8.
+     */
+    fun configure(crt: Boolean, dim: Float) {
+        crtOn = crt
+        tube.visibility = if (crt) View.VISIBLE else View.GONE
+        band.visibility = if (crt) View.VISIBLE else View.GONE
+        if (crt && isAttachedToWindow) roll?.start() else roll?.cancel()
+        val a = (dim / 0.8f).coerceIn(0f, 1f)
+        dimLayer.setBackgroundColor(android.graphics.Color.argb((a * 255).toInt(), 0, 0, 0))
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
@@ -49,13 +66,13 @@ class CrtView(context: Context) : FrameLayout(context) {
             duration = 8_000
             repeatCount = ValueAnimator.INFINITE
             interpolator = LinearInterpolator()
-            if (isAttachedToWindow) start()
+            if (isAttachedToWindow && crtOn) start()
         }
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        roll?.start()
+        if (crtOn) roll?.start()
     }
 
     override fun onDetachedFromWindow() {

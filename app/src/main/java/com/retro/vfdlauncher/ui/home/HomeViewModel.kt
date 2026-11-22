@@ -10,7 +10,16 @@ import com.retro.vfdlauncher.data.apps.AppEntry
 import com.retro.vfdlauncher.data.apps.AppRepository
 import com.retro.vfdlauncher.data.apps.Slot
 import com.retro.vfdlauncher.data.audio.AudioSpectrum
+import android.app.role.RoleManager
+import android.os.Build
+import com.retro.vfdlauncher.data.night.NightMode
+import com.retro.vfdlauncher.data.phone.Favorite
+import com.retro.vfdlauncher.data.phone.PhoneCalls
+import com.retro.vfdlauncher.data.phone.PhoneRepository
+import com.retro.vfdlauncher.data.phone.RecentCall
 import com.retro.vfdlauncher.data.update.UpdateState
+import com.retro.vfdlauncher.overlay.RailAccessibilityService
+import com.retro.vfdlauncher.ui.picker.LauncherStatus
 import com.retro.vfdlauncher.data.update.Updater
 import com.retro.vfdlauncher.data.audio.VolumeRepository
 import com.retro.vfdlauncher.data.media.MediaRepository
@@ -108,7 +117,67 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     private var weatherJob: Job? = null
 
+    val night = NightMode.state
+
+    // ---- Phone (canvas page "Phone calls") ----
+    val phoneRepo = PhoneRepository(app)
+    val call = PhoneCalls.call
+    val favoriteContacts = phoneRepo.favorites
+
+    private val _phoneOpen = MutableStateFlow(false)
+    val phoneOpen: StateFlow<Boolean> = _phoneOpen.asStateFlow()
+
+    private val _recents = MutableStateFlow<List<RecentCall>?>(null)
+    val recents: StateFlow<List<RecentCall>?> = _recents.asStateFlow()
+
+    private val _recentsNote = MutableStateFlow<String?>(null)
+    val recentsNote: StateFlow<String?> = _recentsNote.asStateFlow()
+
+    /** Favourite key being edited, or null. */
+    private val _favoriteEditor = MutableStateFlow<Int?>(null)
+    val favoriteEditor: StateFlow<Int?> = _favoriteEditor.asStateFlow()
+
+    fun togglePhone() {
+        _phoneOpen.value = !_phoneOpen.value
+        if (_phoneOpen.value) loadRecents()
+    }
+
+    fun loadRecents() {
+        viewModelScope.launch {
+            val list = phoneRepo.recentCalls()
+            _recents.value = list
+            _recentsNote.value = when {
+                !phoneRepo.canReadCallLog() -> "ALLOW CALL LOG ACCESS TO SEE RECENT CALLS"
+                list.isEmpty() -> "NO CALLS IN ANDROID'S CALL LOG · USE KEYPAD & CONTACTS"
+                else -> null
+            }
+        }
+    }
+
+    fun editFavorite(i: Int) {
+        _favoriteEditor.value = i
+    }
+
+    fun closeFavoriteEditor() {
+        _favoriteEditor.value = null
+    }
+
+    fun saveFavorite(i: Int, f: Favorite?) {
+        phoneRepo.setFavorite(i, f)
+        _favoriteEditor.value = null
+    }
+
     init {
+        // Night mode: new sunrise/sunset with every forecast, and a re-check every minute.
+        viewModelScope.launch {
+            weather.collect { w -> if (w != null) NightMode.setSun(getApplication(), w.sun, w.utcOffsetSeconds) }
+        }
+        viewModelScope.launch {
+            while (isActive) {
+                NightMode.update(getApplication())
+                delay(60_000L - System.currentTimeMillis() % 60_000L + 200L)
+            }
+        }
         refreshSourcePackages()
         // Follow the audio: when a source starts playing elsewhere (steering wheel, app), switch to it.
         viewModelScope.launch {
@@ -132,6 +201,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun onResume() {
+        refreshStatus()
         volumeRepo.start()
         mediaRepo.start()
         if (weatherJob?.isActive != true) {
@@ -186,6 +256,75 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun mediaAccessIntent(): Intent = mediaRepo.accessSettingsIntent()
 
+    // ---- Launcher settings (the SETTINGS key) ----
+    private val _settingsOpen = MutableStateFlow(false)
+    val settingsOpen: StateFlow<Boolean> = _settingsOpen.asStateFlow()
+
+    private val _status = MutableStateFlow(LauncherStatus())
+    val status: StateFlow<LauncherStatus> = _status.asStateFlow()
+
+    fun openSettings() {
+        refreshStatus()
+        _settingsOpen.value = true
+    }
+
+    fun toggleNight() = NightMode.toggle(getApplication())
+
+    /** Settings DAY NOW / NIGHT NOW (pressing the forced one again returns to AUTO). */
+    fun forceNight(night: Boolean) = NightMode.force(getApplication(), night)
+
+    fun toggleCrt() {
+        val app = getApplication<Application>()
+        com.retro.vfdlauncher.overlay.OverlayBus.loadCrtEnabled(app)
+        com.retro.vfdlauncher.overlay.OverlayBus.setCrtEnabled(app, !com.retro.vfdlauncher.overlay.OverlayBus.crtEnabled.value)
+        refreshStatus()
+    }
+
+    fun changeNightDim(delta: Float) {
+        val app = getApplication<Application>()
+        NightMode.setDimLevel(app, ((NightMode.dimLevel(app) + delta) * 10).let { Math.round(it) / 10f })
+        refreshStatus()
+    }
+
+    fun closeSettings() {
+        _settingsOpen.value = false
+    }
+
+    /** Re-read what Android has granted; called on resume (the user may come back from Settings). */
+    fun refreshStatus() {
+        val app = getApplication<Application>()
+        NightMode.update(app)
+        _status.value = LauncherStatus(
+            backlight = NightMode.canChangeBacklight(app),
+            location = app.checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED,
+            crt = com.retro.vfdlauncher.overlay.OverlayBus.crtEnabled.value,
+            nightDim = NightMode.dimLevel(app),
+            isDefaultHome = isDefaultHome(app),
+            mediaAccess = mediaRepo.checkAccess(),
+            overlay = android.provider.Settings.canDrawOverlays(app),
+            backButton = RailAccessibilityService.isEnabled(app),
+            version = updater.currentVersion,
+        )
+    }
+
+    private fun isDefaultHome(app: Application): Boolean {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val rm = app.getSystemService(RoleManager::class.java)
+            if (rm != null && rm.isRoleAvailable(RoleManager.ROLE_HOME)) return rm.isRoleHeld(RoleManager.ROLE_HOME)
+        }
+        val home = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+        val resolved = app.packageManager.resolveActivity(home, android.content.pm.PackageManager.MATCH_DEFAULT_ONLY)
+        return resolved?.activityInfo?.packageName == app.packageName
+    }
+
+    /** The system's "make this the home app" request, or null where it doesn't exist. */
+    fun requestHomeRoleIntent(): Intent? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val rm = getApplication<Application>().getSystemService(RoleManager::class.java) ?: return null
+        return if (rm.isRoleAvailable(RoleManager.ROLE_HOME)) rm.createRequestRoleIntent(RoleManager.ROLE_HOME) else null
+    }
+
     private fun setSource(s: Source) {
         _source.value = s
         prefs.edit().putString("source", s.name).apply()
@@ -196,10 +335,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
      * the source's app when it has no session yet (e.g. radio app not started since boot).
      */
     suspend fun selectSource(s: Source): Intent? {
+        val fromPhone = _phoneOpen.value
+        _phoneOpen.value = false
         setSource(s)
         val np = if (s == Source.RADIO) radio.value else music.value
-        if (np != null && mediaRepo.playOnly(np.packageName)) return null
-        return appRepo.intentFor(if (s == Source.RADIO) Slot.RADIO else Slot.MUSIC)
+        return when (SourceTap.decide(fromPhone, np != null)) {
+            SourceTap.SHOW_ONLY -> null
+            SourceTap.PLAY -> if (np != null && mediaRepo.playOnly(np.packageName)) null
+                else appRepo.intentFor(if (s == Source.RADIO) Slot.RADIO else Slot.MUSIC)
+            SourceTap.OPEN_APP -> appRepo.intentFor(if (s == Source.RADIO) Slot.RADIO else Slot.MUSIC)
+        }
     }
 
     // ---- Shared ----
@@ -346,6 +491,22 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 Source.RADIO to appRepo.packageFor(Slot.RADIO),
                 Source.MUSIC to appRepo.packageFor(Slot.MUSIC),
             )
+        }
+    }
+}
+
+/**
+ * What a RADIO / YT MUSIC tab tap does. Leaving the PHONE view only switches the view (first tap,
+ * whatever is playing); otherwise play that source, or open its app when it has no session.
+ */
+enum class SourceTap {
+    SHOW_ONLY, PLAY, OPEN_APP;
+
+    companion object {
+        fun decide(fromPhone: Boolean, hasSession: Boolean): SourceTap = when {
+            fromPhone -> SHOW_ONLY
+            hasSession -> PLAY
+            else -> OPEN_APP
         }
     }
 }

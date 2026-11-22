@@ -97,3 +97,48 @@ private fun WeatherPreview() = HomeScreen(state(Source.RADIO, nav = false), noAc
 @Preview(name = "8 · YT Music, playlist picker", widthDp = 1280, heightDp = 720)
 @Composable
 private fun PlaylistsPreview() = HomeScreen(state(Source.MUSIC, nav = true, playlistsOpen = true), noActions)
+
+private val sampleFavorites = listOf(
+    com.retro.vfdlauncher.data.phone.Favorite("MOM", "+32 475 98 76 54"),
+    com.retro.vfdlauncher.data.phone.Favorite("SARAH", "+32 470 12 34 56"),
+    com.retro.vfdlauncher.data.phone.Favorite("JAN", "+32 486 11 22 33"),
+    com.retro.vfdlauncher.data.phone.Favorite("GARAGE", "+32 3 123 45 67"),
+    com.retro.vfdlauncher.data.phone.Favorite("TOWING", "+32 70 00 00 00"),
+    null,
+)
+private val sampleRecents = listOf(
+    com.retro.vfdlauncher.data.phone.RecentCall("SARAH", "+32 470 12 34 56", com.retro.vfdlauncher.data.phone.CallKind.INCOMING, "09:41"),
+    com.retro.vfdlauncher.data.phone.RecentCall("MOM", "+32 475 98 76 54", com.retro.vfdlauncher.data.phone.CallKind.MISSED, "YESTERDAY"),
+    com.retro.vfdlauncher.data.phone.RecentCall("GARAGE", "+32 3 123 45 67", com.retro.vfdlauncher.data.phone.CallKind.OUTGOING, "YESTERDAY"),
+    com.retro.vfdlauncher.data.phone.RecentCall("JAN", "+32 486 11 22 33", com.retro.vfdlauncher.data.phone.CallKind.INCOMING, "FRI"),
+)
+private fun ringing(stage: com.retro.vfdlauncher.data.phone.CallStage) =
+    com.retro.vfdlauncher.data.phone.CallInfo(stage, "SARAH", "+32 470 12 34 56", "com.atoto.btphone", connectedAt = if (stage == com.retro.vfdlauncher.data.phone.CallStage.ACTIVE) 0L else null)
+
+@Preview(name = "Phone · PHONE selected", widthDp = 1280, heightDp = 720)
+@Composable
+private fun PhonePanelPreview() = HomeScreen(
+    state(Source.MUSIC, nav = true).copy(phoneOpen = true, recents = sampleRecents, favorites = sampleFavorites),
+    noActions,
+)
+
+@Preview(name = "Phone · incoming call", widthDp = 1280, heightDp = 720)
+@Composable
+private fun RingingPreview() = HomeScreen(
+    state(Source.MUSIC, nav = true).copy(call = ringing(com.retro.vfdlauncher.data.phone.CallStage.RINGING)),
+    noActions,
+)
+
+@Preview(name = "Phone · in call", widthDp = 1280, heightDp = 720)
+@Composable
+private fun ActiveCallPreview() = HomeScreen(
+    state(Source.MUSIC, nav = true).copy(call = ringing(com.retro.vfdlauncher.data.phone.CallStage.ACTIVE)),
+    noActions,
+)
+
+@Preview(name = "Phone · incoming, no buttons", widthDp = 1280, heightDp = 720)
+@Composable
+private fun FallbackCallPreview() = HomeScreen(
+    state(Source.MUSIC, nav = true).copy(call = ringing(com.retro.vfdlauncher.data.phone.CallStage.RINGING_NO_BUTTONS)),
+    noActions,
+)

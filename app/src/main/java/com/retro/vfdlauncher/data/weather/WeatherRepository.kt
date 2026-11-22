@@ -33,6 +33,9 @@ data class Weather(
     val stale: Boolean = false,
     /** Hourly / 15-minute forecast for the TOP-DOWN meter; null in caches from older versions. */
     val roof: RoofInputs? = null,
+    /** Sunrise/sunset per forecast day (night mode); empty in caches from older versions. */
+    val sun: List<com.retro.vfdlauncher.data.night.SunDay> = emptyList(),
+    val utcOffsetSeconds: Int = 0,
 )
 
 /**
@@ -49,7 +52,7 @@ class WeatherRepository(private val context: Context) {
     suspend fun refresh(maxAgeMs: Long = 15 * 60_000L) {
         val cached = _weather.value
         // A cache from before the TOP-DOWN meter has no forecast: fetch now rather than wait.
-        if (cached != null && !cached.stale && cached.roof != null && System.currentTimeMillis() - cached.fetchedAt < maxAgeMs) return
+        if (cached != null && !cached.stale && cached.roof != null && cached.sun.isNotEmpty() && System.currentTimeMillis() - cached.fetchedAt < maxAgeMs) return
         val json = withContext(Dispatchers.IO) {
             runCatching { download(currentLocation()) }.getOrNull()
         }
@@ -103,7 +106,7 @@ class WeatherRepository(private val context: Context) {
                 "&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_gusts_10m,uv_index,is_day" +
                 "&hourly=precipitation_probability,apparent_temperature,wind_gusts_10m,uv_index&forecast_hours=4" +
                 "&minutely_15=precipitation&forecast_minutely_15=13" +
-                "&daily=weather_code,temperature_2m_max&forecast_days=4&timezone=auto",
+                "&daily=weather_code,temperature_2m_max,sunrise,sunset&forecast_days=4&timezone=auto",
         )
         val conn = url.openConnection() as HttpURLConnection
         conn.connectTimeout = 8_000
@@ -146,7 +149,21 @@ class WeatherRepository(private val context: Context) {
                 forecast = forecast,
                 fetchedAt = fetchedAt,
                 roof = runCatching { parseRoof(root) }.getOrNull(),
+                sun = runCatching { parseSun(daily) }.getOrDefault(emptyList()),
+                utcOffsetSeconds = root.optInt("utc_offset_seconds", 0),
             )
+        }
+
+        /** Sunrise/sunset per day; throws if the response predates them. */
+        fun parseSun(daily: JSONObject): List<com.retro.vfdlauncher.data.night.SunDay> {
+            val rise = daily.getJSONArray("sunrise")
+            val set = daily.getJSONArray("sunset")
+            return (0 until minOf(rise.length(), set.length())).map { i ->
+                com.retro.vfdlauncher.data.night.SunDay(
+                    LocalDateTime.parse(rise.getString(i)),
+                    LocalDateTime.parse(set.getString(i)),
+                )
+            }
         }
 
         /** The TOP-DOWN meter's inputs; throws if the response predates them. */

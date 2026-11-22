@@ -108,7 +108,7 @@ fun PlaylistEditor(
 }
 
 @Composable
-private fun Field(
+internal fun Field(
     label: String,
     value: String,
     onChange: (String) -> Unit,
@@ -134,7 +134,7 @@ private fun Field(
 }
 
 @Composable
-private fun EditorButton(text: String, color: Color, onClick: () -> Unit) {
+internal fun EditorButton(text: String, color: Color, onClick: () -> Unit) {
     VfdButton(Modifier.height(64.dp), border = color.copy(alpha = 0.7f), onClick = onClick) {
         BasicText(text, Modifier.padding(horizontal = 24.dp), style = glow(color, 20.sp, 3.sp, blur = 4f))
     }

@@ -262,8 +262,8 @@ class MediaRepository(
     /** Human-readable dump of all sessions, to see what ATOTO's radio app exposes. */
     fun describeSessions(): String {
         if (!_hasAccess.value) return "Media access not granted."
-        if (controllers.isEmpty()) return "No active media sessions."
         return buildString {
+            if (controllers.isEmpty()) appendLine("No active media sessions.")
             controllers.forEachIndexed { i, c ->
                 val st = c.playbackState
                 appendLine("#$i ${c.packageName}")
@@ -282,6 +282,10 @@ class MediaRepository(
                 c.extras?.let { ex -> ex.keySet().forEach { appendLine("  extra $it") } }
                 appendLine("  flags=${c.flags} playbackType=${c.playbackInfo?.playbackType}")
             }
+            // What the phone app's call notification looks like (to tune call detection to ATOTO).
+            appendLine()
+            appendLine("PHONE CALL (last call notification seen)")
+            appendLine(com.retro.vfdlauncher.data.phone.PhoneCalls.lastRaw ?: "  none seen yet: start or receive a call, then look again")
         }
     }
 

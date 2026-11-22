@@ -38,6 +38,16 @@ import com.retro.vfdlauncher.ui.picker.AppDrawer
 import com.retro.vfdlauncher.ui.picker.AppPicker
 import com.retro.vfdlauncher.ui.picker.PlaylistEditor
 import com.retro.vfdlauncher.ui.picker.SessionInspector
+import com.retro.vfdlauncher.ui.picker.FavoriteEditor
+import com.retro.vfdlauncher.data.phone.PhoneCalls
+import androidx.lifecycle.lifecycleScope
+import com.retro.vfdlauncher.ui.picker.LauncherSettings
+import com.retro.vfdlauncher.ui.picker.SettingsActions
+import com.retro.vfdlauncher.ui.picker.updateLabel
+import com.retro.vfdlauncher.overlay.RailAccessibilityService
+import com.retro.vfdlauncher.data.night.NightMode
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -49,7 +59,58 @@ class MainActivity : ComponentActivity() {
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { granted ->
             if (granted[Manifest.permission.ACCESS_COARSE_LOCATION] == true) vm.onLocationGranted()
             if (granted[Manifest.permission.RECORD_AUDIO] == true) vm.spectrum.start()
+            vm.refreshStatus()
         }
+
+    /**
+     * "Make default launcher": Android's own home-app request. If it is declined or missing
+     * (some head units), fall back to the Default apps > Home app screen.
+     */
+    private val homeRole =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            vm.refreshStatus()
+            if (!vm.status.value.isDefaultHome) safeStart(Intent(Settings.ACTION_HOME_SETTINGS))
+        }
+
+    /** PHONE: ask for call-log (recent calls) and call (favourites) access the first time it opens. */
+    private val phonePermissions =
+        registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { vm.loadRecents() }
+
+    private fun openPhone() {
+        vm.togglePhone()
+        if (vm.phoneOpen.value) {
+            val missing = listOf(Manifest.permission.READ_CALL_LOG, Manifest.permission.CALL_PHONE)
+                .filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+            val prefs = getSharedPreferences("home", MODE_PRIVATE)
+            if (missing.isNotEmpty() && !prefs.getBoolean("phoneAsked", false)) {
+                prefs.edit().putBoolean("phoneAsked", true).apply()
+                phonePermissions.launch(missing.toTypedArray())
+            }
+        }
+    }
+
+    /** Press the call notification's own button; without one, open the phone app instead. */
+    private fun callButton(intent: android.app.PendingIntent?) {
+        if (!PhoneCalls.press(intent)) lifecycleScope.launch { launchSlot(Slot.PHONE) }
+    }
+
+    /** Settings > LOCATION > GRANT: ask again, or Android's app page once it was refused for good. */
+    private fun askLocation() {
+        val p = Manifest.permission.ACCESS_COARSE_LOCATION
+        if (shouldShowRequestPermissionRationale(p) || !getSharedPreferences("home", MODE_PRIVATE).getBoolean("locAsked", false)) {
+            getSharedPreferences("home", MODE_PRIVATE).edit().putBoolean("locAsked", true).apply()
+            permissions.launch(arrayOf(p))
+        } else {
+            safeStart(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")))
+        }
+    }
+
+    private fun makeDefaultLauncher() {
+        val request = vm.requestHomeRoleIntent()
+        if (request == null || runCatching { homeRole.launch(request) }.isFailure) {
+            safeStart(Intent(Settings.ACTION_HOME_SETTINGS))
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +123,8 @@ class MainActivity : ComponentActivity() {
                 vm.closePicker()
                 vm.closeInspector()
                 vm.closeDrawer()
+                vm.closeSettings()
+                vm.closeFavoriteEditor()
                 vm.closePlaylistEditor()
                 vm.closePlaylists()
             }
@@ -86,6 +149,15 @@ class MainActivity : ComponentActivity() {
             val inspector by vm.inspector.collectAsStateWithLifecycle()
             val favorites by vm.favorites.collectAsStateWithLifecycle()
             val update by vm.updateState.collectAsStateWithLifecycle()
+            val settingsOpen by vm.settingsOpen.collectAsStateWithLifecycle()
+            val night by vm.night.collectAsStateWithLifecycle()
+            val phoneOpen by vm.phoneOpen.collectAsStateWithLifecycle()
+            val call by vm.call.collectAsStateWithLifecycle()
+            val recents by vm.recents.collectAsStateWithLifecycle()
+            val recentsNote by vm.recentsNote.collectAsStateWithLifecycle()
+            val favoriteContacts by vm.favoriteContacts.collectAsStateWithLifecycle()
+            val favoriteEditor by vm.favoriteEditor.collectAsStateWithLifecycle()
+            val status by vm.status.collectAsStateWithLifecycle()
             val playlists by vm.playlists.collectAsStateWithLifecycle()
             val currentPlaylist by vm.currentPlaylist.collectAsStateWithLifecycle()
             val playlistsOpen by vm.playlistsOpen.collectAsStateWithLifecycle()
@@ -95,7 +167,8 @@ class MainActivity : ComponentActivity() {
             val actions = HomeActions(
                 onSource = { s -> scope.launch { vm.selectSource(s)?.let { launchApp(it, crt = false) } } },
                 onSourceLongPress = { s -> vm.openPicker(if (s == Source.RADIO) Slot.RADIO else Slot.MUSIC) },
-                onSlot = { slot -> scope.launch { launchSlot(slot) } },
+                // SETTINGS opens the launcher's own settings (with a way through to Android's).
+                onSlot = { slot -> if (slot == Slot.SETTINGS) vm.openSettings() else scope.launch { launchSlot(slot) } },
                 onSlotLongPress = { vm.openPicker(it) },
                 onApps = vm::openDrawer,
                 onPreset = vm::onPresetTap,
@@ -127,6 +200,15 @@ class MainActivity : ComponentActivity() {
                 },
                 onPlaylistEdit = vm::editPlaylist,
                 onOpenMusicApp = { scope.launch { launchSlot(Slot.MUSIC) } },
+                onNight = vm::toggleNight,
+                onPhone = ::openPhone,
+                onPhoneLongPress = { vm.openPicker(Slot.PHONE) },
+                onDial = { number -> safeStart(vm.phoneRepo.callIntent(number)) },
+                onFavorite = { i -> favoriteContacts.getOrNull(i)?.let { safeStart(vm.phoneRepo.callIntent(it.number)) } },
+                onFavoriteEdit = vm::editFavorite,
+                onAnswer = { callButton(call?.answer) },
+                onHangUp = { callButton(call?.hangUp) },
+                onOpenPhone = { scope.launch { launchSlot(Slot.PHONE) } },
             )
 
             CompositionLocalProvider(LocalSpectrumLevels provides vm.spectrum.levels) { Box {
@@ -136,6 +218,12 @@ class MainActivity : ComponentActivity() {
                         playlists = playlists,
                         currentPlaylist = currentPlaylist,
                         playlistsOpen = playlistsOpen,
+                        night = night.isNight,
+                        phoneOpen = phoneOpen,
+                        call = call,
+                        recents = recents,
+                        recentsNote = recentsNote,
+                        favorites = favoriteContacts,
                     ),
                     actions,
                 )
@@ -143,7 +231,7 @@ class MainActivity : ComponentActivity() {
                 val d = drawer
                 val text = inspector
                 val edit = playlistEditor
-                if (p != null || d != null || text != null || edit != null) {
+                if (p != null || d != null || text != null || edit != null || settingsOpen || favoriteEditor != null) {
                     ScaledDesignCanvas {
                         when {
                             p != null -> AppPicker(
@@ -170,6 +258,35 @@ class MainActivity : ComponentActivity() {
                                 onDismiss = vm::closeDrawer,
                             )
                             text != null -> SessionInspector(text, vm::closeInspector)
+                            favoriteEditor != null -> favoriteEditor?.let { i ->
+                                FavoriteEditor(
+                                    index = i,
+                                    current = favoriteContacts.getOrNull(i),
+                                    recents = recents.orEmpty(),
+                                    onSave = { vm.saveFavorite(i, it) },
+                                    onClear = { vm.saveFavorite(i, null) },
+                                    onDismiss = vm::closeFavoriteEditor,
+                                )
+                            }
+                            settingsOpen -> LauncherSettings(
+                                status = status,
+                                night = night,
+                                a = SettingsActions(
+                                    onMakeDefault = ::makeDefaultLauncher,
+                                    onMediaAccess = { safeStart(vm.mediaAccessIntent()) },
+                                    onOverlay = {
+                                        safeStart(
+                                            Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")),
+                                        )
+                                    },
+                                    onLocation = ::askLocation,
+                                    onCrt = vm::toggleCrt,
+                                    onNightDim = vm::changeNightDim,
+                                    onDayNow = { vm.forceNight(false) },
+                                    onNightNow = { vm.forceNight(true) },
+                                    onDismiss = vm::closeSettings,
+                                ),
+                            )
                             edit != null -> PlaylistEditor(
                                 index = edit,
                                 current = playlists.getOrNull(edit),
@@ -179,6 +296,13 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                     }
+                }
+                if (night.dim > 0f) {
+                    androidx.compose.foundation.layout.Box(
+                        androidx.compose.ui.Modifier
+                            .fillMaxSize()
+                            .background(androidx.compose.ui.graphics.Color.Black.copy(alpha = night.dim)),
+                    )
                 }
             } }
         }
