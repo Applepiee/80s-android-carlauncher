@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
                 vm.closeInspector()
                 vm.closeDrawer()
                 vm.closeSettings()
+                vm.closeStations()
                 vm.closeFavoriteEditor()
                 vm.closePlaylistEditor()
                 vm.closePlaylists()
@@ -152,6 +153,7 @@ class MainActivity : ComponentActivity() {
             val settingsOpen by vm.settingsOpen.collectAsStateWithLifecycle()
             val night by vm.night.collectAsStateWithLifecycle()
             val phoneOpen by vm.phoneOpen.collectAsStateWithLifecycle()
+            val netUi by vm.netUi.collectAsStateWithLifecycle()
             val call by vm.call.collectAsStateWithLifecycle()
             val recents by vm.recents.collectAsStateWithLifecycle()
             val recentsNote by vm.recentsNote.collectAsStateWithLifecycle()
@@ -202,6 +204,19 @@ class MainActivity : ComponentActivity() {
                 onOpenMusicApp = { scope.launch { launchSlot(Slot.MUSIC) } },
                 onNight = vm::toggleNight,
                 onPhone = ::openPhone,
+                net = com.retro.vfdlauncher.ui.home.NetRadioActions(
+                    onPreset = vm::netPreset,
+                    onPresetSave = vm::netPresetSave,
+                    onPlayKey = vm::netPlayKey,
+                    onPrev = { vm.netStep(-1) },
+                    onNext = { vm.netStep(1) },
+                    onStations = vm::openStations,
+                    onPickerClose = vm::closeStations,
+                    onQuery = vm::stationQuery,
+                    onCountry = vm::stationCountry,
+                    onGenre = vm::stationGenre,
+                    onPickStation = vm::pickStation,
+                ),
                 onPhoneLongPress = { vm.openPicker(Slot.PHONE) },
                 onDial = { number -> safeStart(vm.phoneRepo.callIntent(number)) },
                 onFavorite = { i -> favoriteContacts.getOrNull(i)?.let { safeStart(vm.phoneRepo.callIntent(it.number)) } },
@@ -220,6 +235,7 @@ class MainActivity : ComponentActivity() {
                         playlistsOpen = playlistsOpen,
                         night = night.isNight,
                         phoneOpen = phoneOpen,
+                        net = netUi,
                         call = call,
                         recents = recents,
                         recentsNote = recentsNote,
@@ -241,6 +257,7 @@ class MainActivity : ComponentActivity() {
                                 onPick = { vm.assign(p.slot, it.component) },
                                 onReset = { vm.assign(p.slot, null) },
                                 onToggleHidden = { vm.openPicker(p.slot, !p.showHidden) },
+                                onInternetRadio = if (p.slot == Slot.RADIO) vm::useInternetRadio else null,
                                 onDismiss = vm::closePicker,
                             )
                             d != null -> AppDrawer(

@@ -14,7 +14,18 @@ nothing beyond AndroidX, so it is ready right after the unit wakes from sleep.
 - **Source switch.** The **RADIO** and **YT MUSIC** tabs start that app's playback and pause the other one. If the
   app isn't running yet, the tab opens it. The screen also follows the audio, so if music starts from the steering
   wheel it switches to the music view. Long-press a tab to choose which app it controls.
-- **Radio.** Shows the frequency in big segment digits, the station name, six preset keys, SEEK, TUNE and MUTE.
+- **Radio (internet radio, the default).** The launcher plays internet radio itself, over the unit's SIM or Wi-Fi.
+  - The station name fills the big segment display, with country, genre and bitrate top right, and the song now
+    playing (when the stream sends it) plus the spectrum underneath. The NET chip in the top bar shows the stream
+    bitrate, BUFFERING, or NO NET.
+  - **STATIONS** opens the station search: type a name, tap COUNTRY to cycle (Belgium first) and pick a genre. Tap a
+    result to play it. Stations come from the free [Radio Browser](https://www.radio-browser.info) directory.
+  - Six preset keys: hold one to save the station that's playing, tap to play it. PREV and NEXT step through them,
+    and so do the floating rail and the steering-wheel keys.
+  - STOP stops the stream. Without data it shows NO SIGNAL, retries every 5 seconds, and the key becomes RETRY.
+- **Radio (the unit's own FM radio).** Long-press RADIO and choose the unit's radio app to use it instead; the
+  INTERNET RADIO key in that list switches back. It shows the frequency in big segment digits, the station name,
+  six preset keys, SEEK, TUNE and MUTE.
   - Long-press a preset key to store the current station. Tap it to tune back to that station.
   - The launcher controls the unit's own radio app through Android's media session. What works therefore depends
     on what that app shares. See [Head-unit radio](#head-unit-radio) below.

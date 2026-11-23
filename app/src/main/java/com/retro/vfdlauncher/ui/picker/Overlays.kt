@@ -89,6 +89,8 @@ fun AppPicker(
     onReset: () -> Unit,
     onToggleHidden: () -> Unit,
     onDismiss: () -> Unit,
+    /** RADIO only: go back to the launcher's built-in internet radio. */
+    onInternetRadio: (() -> Unit)? = null,
 ) {
     Sheet(onDismiss) {
         Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -99,6 +101,7 @@ fun AppPicker(
                     style = glow(Vfd.Teal, 26.sp, 4.sp, blur = 8f, family = Vfd.Orbitron),
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    onInternetRadio?.let { SheetButton("INTERNET RADIO", Vfd.Amber, it) }
                     SheetButton(if (showHidden) "HIDE SYSTEM" else "SHOW HIDDEN", Vfd.Amber, onToggleHidden)
                     SheetButton("AUTO", onClick = onReset)
                     SheetButton("CLOSE", onClick = onDismiss)

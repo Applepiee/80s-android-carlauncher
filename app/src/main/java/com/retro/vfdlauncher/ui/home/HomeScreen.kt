@@ -109,6 +109,8 @@ data class HomeState(
     val playlistsOpen: Boolean = false,
     /** Night mode is on (dims the screen; the moon key is lit). */
     val night: Boolean = false,
+    /** RADIO = internet radio (canvas "Internet radio"); null = the head unit's radio app. */
+    val net: NetRadioUi? = null,
     /** PHONE selected: recent calls + favourites replace the media section. */
     val phoneOpen: Boolean = false,
     /** Current call (from the phone app's call notification), or null. */
@@ -154,6 +156,7 @@ class HomeActions(
     /** Moon key: switch night mode on/off until the next sunrise or sunset. */
     val onNight: () -> Unit = {},
     val onPhone: () -> Unit = {},
+    val net: NetRadioActions = NetRadioActions(),
     /** Hold PHONE: choose the phone app (KEYPAD & CONTACTS / OPEN PHONE). */
     val onPhoneLongPress: () -> Unit = {},
     val onDial: (String) -> Unit = {},
@@ -218,6 +221,12 @@ fun HomeScreen(state: HomeState, actions: HomeActions) {
             }
             if (state.phoneOpen) {
                 // media rows are replaced above
+            } else if (state.source == Source.RADIO && state.net != null) {
+                NetPresetGrid(state.net, actions.net, Modifier.offset(40.dp, 428.dp).size(780.dp, 156.dp))
+                NetRadioControls(state.net, actions.net, Modifier.offset(40.dp, 604.dp).size(780.dp, 84.dp))
+                state.net.picker?.let { p ->
+                    StationPickerPanel(p, state.net.state.station, actions.net, Modifier.offset(40.dp, 108.dp).size(780.dp, 580.dp))
+                }
             } else if (state.source == Source.RADIO) {
                 PresetGrid(state, actions, Modifier.offset(40.dp, 428.dp).size(780.dp, 156.dp))
                 RadioControls(state, actions, Modifier.offset(40.dp, 604.dp).size(780.dp, 84.dp))
@@ -261,15 +270,20 @@ private fun TopBar(state: HomeState, actions: HomeActions, modifier: Modifier) {
                 if (state.music?.isPlaying == true) "STREAMING" else "STANDBY"
             }
             SourceTab("PHONE", VfdIcons.Phone, 156.dp, state.phoneOpen, actions.onPhone, actions.onPhoneLongPress)
-            BasicText(
-                indicators,
-                Modifier
-                    .padding(start = 14.dp)
-                    .weight(1f, fill = false),
-                style = glow(Vfd.Teal, 20.sp, 3.sp, blur = 8f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            if (state.net != null) {
+                // Canvas "Internet radio": data-connection chip in place of the indicators.
+                NetChip(state.net, state.source == Source.RADIO && !state.phoneOpen, indicators, Modifier.padding(start = 6.dp))
+            } else {
+                BasicText(
+                    indicators,
+                    Modifier
+                        .padding(start = 14.dp)
+                        .weight(1f, fill = false),
+                    style = glow(Vfd.Teal, 20.sp, 3.sp, blur = 8f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(18.dp)) {
             MoonKey(state.night, actions.onNight)
@@ -362,7 +376,11 @@ private fun MainDisplay(state: HomeState, actions: HomeActions, modifier: Modifi
             )
             .padding(horizontal = 28.dp, vertical = 22.dp),
     ) {
-        if (state.source == Source.RADIO) RadioDisplay(state) else MusicDisplay(state, actions)
+        when {
+            state.source == Source.RADIO && state.net != null -> NetRadioDisplay(state.net)
+            state.source == Source.RADIO -> RadioDisplay(state)
+            else -> MusicDisplay(state, actions)
+        }
     }
 }
 

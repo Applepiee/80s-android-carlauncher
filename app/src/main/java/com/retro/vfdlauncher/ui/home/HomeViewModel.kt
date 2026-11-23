@@ -13,6 +13,11 @@ import com.retro.vfdlauncher.data.audio.AudioSpectrum
 import android.app.role.RoleManager
 import android.os.Build
 import com.retro.vfdlauncher.data.night.NightMode
+import com.retro.vfdlauncher.data.netradio.NetRadio
+import com.retro.vfdlauncher.data.netradio.NetStatus
+import com.retro.vfdlauncher.data.netradio.RadioCountries
+import com.retro.vfdlauncher.data.netradio.RadioGenres
+import com.retro.vfdlauncher.data.netradio.RadioStation
 import com.retro.vfdlauncher.data.phone.Favorite
 import com.retro.vfdlauncher.data.phone.PhoneCalls
 import com.retro.vfdlauncher.data.phone.PhoneRepository
@@ -85,12 +90,17 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     /** Packages the RADIO and MUSIC sources resolve to (assigned or auto-detected). */
     private val sourcePackages = MutableStateFlow<Map<Source, String?>>(emptyMap())
 
-    val radio: StateFlow<NowPlaying?> = combine(mediaRepo.sessions, sourcePackages) { list, pkgs ->
+    private val ownPkg = app.packageName
+
+    val radio: StateFlow<NowPlaying?> = combine(mediaRepo.sessions, sourcePackages) { all, pkgs ->
+        // Our own session is the internet radio; it is shown from NetRadio, not as a media app.
+        val list = all.filter { it.packageName != ownPkg }
         list.firstOrNull { it.packageName == pkgs[Source.RADIO] }
             ?: list.filter { it.isRadio }.let { r -> r.firstOrNull { it.isPlaying } ?: r.firstOrNull() }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    val music: StateFlow<NowPlaying?> = combine(mediaRepo.sessions, sourcePackages) { list, pkgs ->
+    val music: StateFlow<NowPlaying?> = combine(mediaRepo.sessions, sourcePackages) { all, pkgs ->
+        val list = all.filter { it.packageName != ownPkg }
         val radioPkg = pkgs[Source.RADIO]
         val candidates = list.filter { !it.isRadio && it.packageName != radioPkg }
         candidates.firstOrNull { it.packageName == pkgs[Source.MUSIC] && it.isPlaying }
@@ -118,6 +128,100 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private var weatherJob: Job? = null
 
     val night = NightMode.state
+
+    // ---- Internet radio (canvas page "Internet radio") ----
+    private val _netPicker = MutableStateFlow<com.retro.vfdlauncher.ui.home.StationPicker?>(null)
+    private var searchJob: Job? = null
+
+    /** RADIO tab as internet radio, or null when it uses the head unit's radio app. */
+    val netUi: StateFlow<NetRadioUi?> = combine(NetRadio.enabled, NetRadio.state, NetRadio.presets, _netPicker) { on, st, pr, pk ->
+        if (on) NetRadioUi(st, pr, pk) else null
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private fun netOn() = NetRadio.enabled.value
+
+    fun netPreset(i: Int) {
+        if (NetRadio.presets.value.getOrNull(i) != null) {
+            mediaRepo.pauseOthers(ownPkg)
+            NetRadio.playPreset(getApplication(), i)
+        }
+    }
+
+    fun netPresetSave(i: Int) {
+        NetRadio.savePreset(getApplication(), i)
+    }
+
+    fun netPlayKey() {
+        val app = getApplication<Application>()
+        when (NetRadio.state.value.status) {
+            NetStatus.PLAYING, NetStatus.BUFFERING -> NetRadio.stop(app)
+            else -> if (NetRadio.state.value.station == null) openStations() else {
+                mediaRepo.pauseOthers(ownPkg)
+                NetRadio.resume(app)
+            }
+        }
+    }
+
+    fun netStep(delta: Int) {
+        mediaRepo.pauseOthers(ownPkg)
+        NetRadio.step(getApplication(), delta)
+    }
+
+    fun openStations() {
+        if (_netPicker.value == null) _netPicker.value = com.retro.vfdlauncher.ui.home.StationPicker()
+        searchStations(0)
+    }
+
+    fun closeStations() {
+        searchJob?.cancel()
+        _netPicker.value = null
+    }
+
+    fun stationQuery(q: String) {
+        _netPicker.value = _netPicker.value?.copy(query = q) ?: return
+        searchStations(400)
+    }
+
+    fun stationCountry() {
+        val p = _netPicker.value ?: return
+        _netPicker.value = p.copy(countryIndex = (p.countryIndex + 1) % RadioCountries.list.size)
+        searchStations(0)
+    }
+
+    fun stationGenre(i: Int) {
+        _netPicker.value = _netPicker.value?.copy(genreIndex = i) ?: return
+        searchStations(0)
+    }
+
+    fun pickStation(s: RadioStation) {
+        closeStations()
+        mediaRepo.pauseOthers(ownPkg)
+        setSource(Source.RADIO)
+        NetRadio.play(getApplication(), s)
+    }
+
+    private fun searchStations(debounceMs: Long) {
+        searchJob?.cancel()
+        searchJob = viewModelScope.launch {
+            if (debounceMs > 0) delay(debounceMs)
+            val p = _netPicker.value ?: return@launch
+            _netPicker.value = p.copy(results = null, error = false)
+            val result = runCatching {
+                NetRadio.browser.search(p.query, RadioCountries.list[p.countryIndex].code, RadioGenres[p.genreIndex].tag)
+            }
+            val now = _netPicker.value ?: return@launch
+            _netPicker.value = result.fold(
+                { now.copy(results = it, error = false) },
+                { now.copy(results = emptyList(), error = true) },
+            )
+        }
+    }
+
+    /** RADIO picker: "INTERNET RADIO" goes back to the built-in internet radio. */
+    fun useInternetRadio() {
+        NetRadio.setEnabled(getApplication(), true)
+        _picker.value = null
+    }
 
     // ---- Phone (canvas page "Phone calls") ----
     val phoneRepo = PhoneRepository(app)
@@ -168,6 +272,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     init {
+        NetRadio.load(app)
         // Night mode: new sunrise/sunset with every forecast, and a re-check every minute.
         viewModelScope.launch {
             weather.collect { w -> if (w != null) NightMode.setSun(getApplication(), w.sun, w.utcOffsetSeconds) }
@@ -181,9 +286,11 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         refreshSourcePackages()
         // Follow the audio: when a source starts playing elsewhere (steering wheel, app), switch to it.
         viewModelScope.launch {
-            var radioWasPlaying = radio.value?.isPlaying == true
+            fun radioOn(r: NowPlaying?, n: NetRadioUi?) =
+                if (n != null) n.state.status == NetStatus.PLAYING || n.state.status == NetStatus.BUFFERING else r?.isPlaying == true
+            var radioWasPlaying = radioOn(radio.value, netUi.value)
             var musicWasPlaying = music.value?.isPlaying == true
-            combine(radio, music) { r, m -> (r?.isPlaying == true) to (m?.isPlaying == true) }.collect { (r, m) ->
+            combine(radio, music, netUi) { r, m, n -> radioOn(r, n) to (m?.isPlaying == true) }.collect { (r, m) ->
                 if (r && !radioWasPlaying) setSource(Source.RADIO)
                 else if (m && !musicWasPlaying) setSource(Source.MUSIC)
                 radioWasPlaying = r
@@ -338,6 +445,16 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
         val fromPhone = _phoneOpen.value
         _phoneOpen.value = false
         setSource(s)
+        if (s == Source.RADIO && netOn()) {
+            if (!fromPhone) {
+                mediaRepo.pauseOthers(ownPkg)
+                val st = NetRadio.state.value.status
+                if (st != NetStatus.PLAYING && st != NetStatus.BUFFERING) {
+                    if (NetRadio.state.value.station == null) openStations() else NetRadio.resume(getApplication())
+                }
+            }
+            return null
+        }
         val np = if (s == Source.RADIO) radio.value else music.value
         return when (SourceTap.decide(fromPhone, np != null)) {
             SourceTap.SHOW_ONLY -> null
@@ -481,6 +598,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     fun assign(slot: Slot, component: ComponentName?) {
         appRepo.assign(slot, component)
+        // Choosing an app (or AUTO) for RADIO switches the tab to the head unit's own radio.
+        if (slot == Slot.RADIO) NetRadio.setEnabled(getApplication(), false)
         _picker.value = null
         refreshSourcePackages()
     }
