@@ -21,6 +21,8 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- Internet radio (RADIO tab) plays from a media session service. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <!-- Sideloaded launcher: needs to see every app, including hidden system ones like the Android Auto receiver. -->
     <uses-permission
         android:name="android.permission.QUERY_ALL_PACKAGES"
@@ -52,6 +54,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Internet radio player (media3 ExoPlayer + MediaSession). -->
+        <service
+            android:name=".data.netradio.RadioService"
+            android:exported="true"
+            android:foregroundServiceType="mediaPlayback">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+                <action android:name="android.media.browse.MediaBrowserService" />
+            </intent-filter>
+        </service>
         <service
             android:name=".data.media.MediaListenerService"
             android:exported="false"

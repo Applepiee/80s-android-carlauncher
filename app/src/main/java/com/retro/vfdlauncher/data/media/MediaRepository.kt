@@ -178,6 +178,12 @@ class MediaRepository(
         return true
     }
 
+    /** Pause every playing session except [pkg] (internet radio starting). */
+    fun pauseOthers(pkg: String) {
+        controllers.filter { it.packageName != pkg && it.playbackState?.state == PlaybackState.STATE_PLAYING }
+            .forEach { it.transportControls.pause() }
+    }
+
     fun next(pkg: String?) {
         controller(pkg)?.transportControls?.skipToNext() ?: sendMediaKey(KeyEvent.KEYCODE_MEDIA_NEXT)
     }
