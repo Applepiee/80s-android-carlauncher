@@ -47,11 +47,10 @@ data class LauncherStatus(
     val mediaAccess: Boolean = false,
     val overlay: Boolean = false,
     val location: Boolean = false,
-    val backButton: Boolean = false,
     val version: String = "",
     /** "Modify system settings" granted: night mode also lowers the real backlight. */
     val backlight: Boolean = false,
-    /** Settings > DISPLAY > CRT EFFECT OVER APPS. */
+    /** Settings > DISPLAY > SCANLINES OVER APPS. */
     val crt: Boolean = true,
     /** Black layer strength at night, 0..0.8. */
     val nightDim: Float = NightMode.DEFAULT_DIM,
@@ -119,12 +118,12 @@ fun LauncherSettings(status: LauncherStatus, a: SettingsActions, night: NightSta
             PermRow("LOCATION", status.location, a.onLocation)
             SectionLabel("DISPLAY", Modifier.padding(top = 14.dp))
             LampRow(lampOn = status.crt, lamp = Vfd.Teal, line = false) {
-                BasicText("CRT EFFECT OVER APPS", Modifier.weight(1f), style = rowText())
+                BasicText("SCANLINES OVER APPS", Modifier.weight(1f), style = rowText())
                 VfdButton(
                     Modifier.size(130.dp, 52.dp),
                     border = Vfd.Teal,
                     fill = if (status.crt) Vfd.Teal else Color.Transparent,
-                    onClickLabel = if (status.crt) "crt effect off" else "crt effect on",
+                    onClickLabel = if (status.crt) "scanlines off" else "scanlines on",
                     onClick = a.onCrt,
                 ) {
                     BasicText(if (status.crt) "ON" else "OFF", style = glow(if (status.crt) Vfd.Panel else Vfd.Teal, 20.sp, 3.sp, blur = 0f))

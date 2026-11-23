@@ -27,7 +27,7 @@ import java.util.Locale
 
 /**
  * Plays internet radio for the RADIO tab: ExoPlayer in a media3 MediaSessionService, so the
- * floating rail, steering-wheel keys, the spectrum and the volume keys treat it like any media app.
+ * head unit's buttons, steering-wheel keys and the spectrum treat it like any media app.
  * NEXT / PREVIOUS step through the six presets. When the stream drops it retries every 5 s.
  */
 @UnstableApi

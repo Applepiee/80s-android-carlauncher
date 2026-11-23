@@ -39,7 +39,7 @@ object NightClock {
 }
 
 /**
- * Night mode for the whole launcher: the home screen, the floating rail and the shade over other
+ * Night mode for the whole launcher: the home screen and the shade over other
  * apps all read [state]. Automatic from sunrise/sunset (Open-Meteo), with a manual moon key that
  * holds until the next sunrise or sunset. At night it also lowers the real backlight when the user
  * allowed "Modify system settings", and restores the daytime brightness in the morning.

@@ -44,7 +44,6 @@ import androidx.lifecycle.lifecycleScope
 import com.retro.vfdlauncher.ui.picker.LauncherSettings
 import com.retro.vfdlauncher.ui.picker.SettingsActions
 import com.retro.vfdlauncher.ui.picker.updateLabel
-import com.retro.vfdlauncher.overlay.RailAccessibilityService
 import com.retro.vfdlauncher.data.night.NightMode
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.fillMaxSize
@@ -365,12 +364,12 @@ class MainActivity : ComponentActivity() {
     }
 
     /**
-     * Opens another app with the floating VFD bar over it (and the CRT effect for maps and
-     * Android Auto). The first time, asks for "display over other apps" instead.
+     * Opens another app, with the scanline overlay over maps and Android Auto (and the night dim
+     * layer over any app). The first time, asks for "display over other apps" instead.
      */
     private fun launchApp(intent: Intent, crt: Boolean): Boolean {
         if (!Settings.canDrawOverlays(this) && askOverlayOnce()) return true
-        // CRT over navigation apps however they were opened (MAPS key, drawer, favourites).
+        // Scanlines over navigation apps however they were opened (MAPS key, drawer, favourites).
         val pkg = intent.component?.packageName ?: intent.`package`
         OverlayBus.setCrtWanted(crt || pkg in NavigationState.NAV_PACKAGES)
         OverlayService.ensureRunning(this)

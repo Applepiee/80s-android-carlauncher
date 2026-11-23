@@ -1,6 +1,4 @@
 <resources>
     <string name="app_name">Roadster Launcher</string>
     <string name="media_listener_label">Roadster Launcher now playing</string>
-    <string name="rail_accessibility_label">Roadster Launcher BACK button</string>
-    <string name="rail_accessibility_description">Lets the BACK button on the floating controls of Roadster Launcher go back in the app you are using. It reads nothing on screen; it only presses Back when you tap that button.</string>
 </resources>

@@ -9,11 +9,11 @@ object OverlayBus {
     private val _launcherVisible = MutableStateFlow(true)
     val launcherVisible: StateFlow<Boolean> = _launcherVisible.asStateFlow()
 
-    /** CRT effect only for apps it was designed for (maps, Android Auto). */
+    /** Scanlines only over the apps they were designed for (maps, Android Auto). */
     private val _crtWanted = MutableStateFlow(false)
     val crtWanted: StateFlow<Boolean> = _crtWanted.asStateFlow()
 
-    /** Settings > DISPLAY > CRT EFFECT OVER APPS (saved in prefs "display"). */
+    /** Settings > DISPLAY > SCANLINES OVER APPS (saved in prefs "display"). */
     private val _crtEnabled = MutableStateFlow(true)
     val crtEnabled: StateFlow<Boolean> = _crtEnabled.asStateFlow()
 

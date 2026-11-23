@@ -17,11 +17,12 @@ nothing beyond AndroidX, so it is ready right after the unit wakes from sleep.
 - **Radio (internet radio, the default).** The launcher plays internet radio itself, over the unit's SIM or Wi-Fi.
   - The station name fills the big segment display, with country, genre and bitrate top right, and the song now
     playing (when the stream sends it) plus the spectrum underneath. The NET chip in the top bar shows the stream
-    bitrate, BUFFERING, or NO NET.
+    bitrate, BUFFERING, or NO NET when there's no data connection at all. Plain `http://` streams play too.
   - **STATIONS** opens the station search: type a name, tap COUNTRY to cycle (Belgium first) and pick a genre. Tap a
     result to play it. Stations come from the free [Radio Browser](https://www.radio-browser.info) directory.
   - Six preset keys: hold one to save the station that's playing, tap to play it. PREV and NEXT step through them,
-    and so do the floating rail and the steering-wheel keys.
+    and so do the head unit's and steering-wheel keys. With no presets saved they step through the last station
+    search, or the most popular stations of the current country.
   - STOP stops the stream. Without data it shows NO SIGNAL, retries every 5 seconds, and the key becomes RETRY.
 - **Radio (the unit's own FM radio).** Long-press RADIO and choose the unit's radio app to use it instead; the
   INTERNET RADIO key in that list switches back. It shows the frequency in big segment digits, the station name,
@@ -50,7 +51,7 @@ nothing beyond AndroidX, so it is ready right after the unit wakes from sleep.
   instead.
 - **App keys.**
   - MAPS, ANDROID AUTO and CAMERA are detected automatically. Long-press a key to choose a different app.
-  - SETTINGS opens the launcher's own settings (permissions, CRT effect, night mode). Android's settings are in the
+  - SETTINGS opens the launcher's own settings (permissions, scanlines, night mode). Android's settings are in the
     app drawer.
     The picker can also show hidden system activities, which is where head units often keep the Android Auto app.
   - **APPS** opens the app drawer. Long-press an app there to pin it to the favourites row at the top.
@@ -78,14 +79,19 @@ points:
 
 The logic lives in `data/weather/RoofMeter.kt`.
 
-### Floating controls over other apps
+### Over other apps
 
-Apps opened from the launcher get a slim VFD control rail on the left edge, with home, previous / play / next and
-volume. It stays clear of Google Maps' own buttons and folds away to a single HOME key.
+There are no on-screen controls over other apps: the head unit's own buttons handle volume, skip and home.
 
-Maps and Android Auto also get a CRT overlay: scanlines, RGB phosphor stripes, a curved-glass bezel with colour
-fringing and a slow rolling refresh band. The overlay is slightly see-through and ignores touches, so taps still
-reach the app underneath.
+Maps and Android Auto get a light VFD look: fine horizontal scanlines and a faint amber tint, like the home
+screen. At night the dim layer sits on top of every app. The overlay ignores touches, so taps still reach the app
+underneath. Turn the scanlines off in **SETTINGS › SCANLINES OVER APPS**.
+
+### Volume
+
+The VOL keys change the system volume, the same one as the unit's own buttons and knob: they press a real volume
+key, and fall back to Android's volume routing. The session inspector's VOLUME section shows what the last press
+did.
 
 ### Session inspector
 
@@ -98,7 +104,7 @@ actions. This is the tool for finding out what a head unit's radio app exposes.
 |---|---|
 | Notification access | Read and control other apps' playback, and read Maps' next turn |
 | Location (coarse) | Local weather. Falls back to a fixed location (Brussels) without it |
-| Display over other apps | The floating control rail and the CRT overlay |
+| Display over other apps | The scanlines and the night dim layer over other apps |
 | Microphone (`RECORD_AUDIO`) | Android requires it for the audio `Visualizer`; no audio is recorded |
 | Query all packages | Find the radio, Android Auto and camera apps, including hidden ones |
 
@@ -164,7 +170,7 @@ app/src/main/java/com/retro/vfdlauncher/
   data/audio/              volume and the audio Visualizer
   data/apps/               app scan (including hidden activities) and key assignments
   data/nav/                next turn from the Maps notification
-  overlay/                 floating control rail and CRT overlay service
+  overlay/                 scanline and night-dim overlay service
 app/src/main/res/font/     Share Tech Mono and Orbitron
 ```
 

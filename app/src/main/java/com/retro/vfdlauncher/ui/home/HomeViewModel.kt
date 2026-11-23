@@ -23,7 +23,6 @@ import com.retro.vfdlauncher.data.phone.PhoneCalls
 import com.retro.vfdlauncher.data.phone.PhoneRepository
 import com.retro.vfdlauncher.data.phone.RecentCall
 import com.retro.vfdlauncher.data.update.UpdateState
-import com.retro.vfdlauncher.overlay.RailAccessibilityService
 import com.retro.vfdlauncher.ui.picker.LauncherStatus
 import com.retro.vfdlauncher.data.update.Updater
 import com.retro.vfdlauncher.data.audio.VolumeRepository
@@ -134,8 +133,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     private var searchJob: Job? = null
 
     /** RADIO tab as internet radio, or null when it uses the head unit's radio app. */
-    val netUi: StateFlow<NetRadioUi?> = combine(NetRadio.enabled, NetRadio.state, NetRadio.presets, _netPicker) { on, st, pr, pk ->
-        if (on) NetRadioUi(st, pr, pk) else null
+    val netUi: StateFlow<NetRadioUi?> = combine(NetRadio.enabled, NetRadio.state, NetRadio.presets, _netPicker, NetRadio.online) { on, st, pr, pk, online ->
+        if (on) NetRadioUi(st, pr, pk, online) else null
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private fun netOn() = NetRadio.enabled.value
@@ -210,6 +209,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
                 NetRadio.browser.search(p.query, RadioCountries.list[p.countryIndex].code, RadioGenres[p.genreIndex].tag)
             }
             val now = _netPicker.value ?: return@launch
+            result.getOrNull()?.let { NetRadio.setBrowseList(it) }
             _netPicker.value = result.fold(
                 { now.copy(results = it, error = false) },
                 { now.copy(results = emptyList(), error = true) },
@@ -410,7 +410,6 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
             isDefaultHome = isDefaultHome(app),
             mediaAccess = mediaRepo.checkAccess(),
             overlay = android.provider.Settings.canDrawOverlays(app),
-            backButton = RailAccessibilityService.isEnabled(app),
             version = updater.currentVersion,
         )
     }
