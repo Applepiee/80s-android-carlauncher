@@ -119,7 +119,7 @@ object NetRadio {
             return
         }
         val app = context.applicationContext
-        val country = _state.value.station?.countryCode?.takeIf { it.isNotEmpty() } ?: RadioCountries.list.first().code
+        val country = _state.value.station?.countryCode?.takeIf { it.isNotEmpty() } ?: RadioCountries.list[RadioCountries.DEFAULT_INDEX].code
         scope.launch {
             val top = runCatching { browser.search("", country, null, limit = 40) }.getOrDefault(emptyList())
             if (top.isNotEmpty()) {
