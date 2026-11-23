@@ -75,6 +75,8 @@ data class NetRadioUi(
     val presets: List<RadioStation?> = List(6) { null },
     /** STATIONS picker, or null when closed. */
     val picker: StationPicker? = null,
+    /** A data connection is up; NO NET only when it isn't (a dead stream is NO SIGNAL instead). */
+    val online: Boolean = true,
 )
 
 /** Actions of the internet radio screen. */
@@ -195,18 +197,20 @@ internal fun NetChip(ui: NetRadioUi, radioTab: Boolean, musicWord: String, modif
     val accent = Vfd.Teal
     val (word, color) = when {
         !radioTab -> musicWord to accent
+        !ui.online -> "NO NET" to NetRed
         status == NetStatus.BUFFERING -> "BUFFERING" to Vfd.Amber
-        status == NetStatus.OFFLINE -> "NO NET" to NetRed
+        status == NetStatus.OFFLINE -> "NET" to Vfd.Amber
         else -> (ui.state.station?.bitrate?.takeIf { it > 0 }?.let { "NET ${it}K" } ?: "NET") to accent
     }
     val dimAmber = Vfd.Amber.copy(alpha = 0.25f)
     val dimRed = NetRed.copy(alpha = 0.25f)
     val bars = when {
+        radioTab && !ui.online -> List(4) { dimRed }
         !radioTab || status == NetStatus.PLAYING || status == NetStatus.STOPPED || status == NetStatus.IDLE -> List(4) { accent }
         status == NetStatus.BUFFERING -> listOf(Vfd.Amber, Vfd.Amber, dimAmber, dimAmber)
-        else -> List(4) { dimRed }
+        else -> List(4) { Vfd.Amber } // online, but this stream sends nothing (NO SIGNAL on the display)
     }
-    val offline = radioTab && status == NetStatus.OFFLINE
+    val offline = radioTab && !ui.online
     Row(
         modifier
             .height(56.dp)

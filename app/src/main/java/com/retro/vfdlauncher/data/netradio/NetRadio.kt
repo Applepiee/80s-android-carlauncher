@@ -2,6 +2,13 @@ package com.retro.vfdlauncher.data.netradio
 
 import android.content.Context
 import android.content.Intent
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,11 +51,23 @@ object NetRadio {
 
     val browser = RadioBrowser(USER_AGENT)
 
+    private val _online = MutableStateFlow(true)
+    /**
+     * A data connection is up (SIM or Wi-Fi). Head units on a SIM often never pass Android's
+     * "validated" check, so only INTERNET is required. The NET chip says NO NET only when this is false.
+     */
+    val online: StateFlow<Boolean> = _online.asStateFlow()
+
+    /** Stations PREV / NEXT walk through when no presets are saved: the last STATIONS search. */
+    @Volatile private var browseList: List<RadioStation> = emptyList()
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     @Volatile private var loaded = false
 
     fun load(context: Context) {
         if (loaded) return
         loaded = true
+        watchNetwork(context.applicationContext)
         val p = prefs(context)
         _presets.value = RadioJson.decodePresets(p.getString(KEY_PRESETS, null))
         _enabled.value = p.getString(KEY_MODE, "net") != "app"
@@ -83,14 +102,38 @@ object NetRadio {
         send(context, RadioService.ACTION_STOP, null)
     }
 
-    /** PREV / NEXT: step through the stored presets. */
+    /**
+     * PREV / NEXT: step through the stored presets. With no presets saved, step through the last
+     * STATIONS search instead, or (before any search) the most popular stations of the current
+     * station's country.
+     */
     fun step(context: Context, delta: Int) {
-        val list = _presets.value.withIndex().filter { it.value != null }
-        if (list.isEmpty()) return
-        val cur = list.indexOfFirst { it.value?.uuid == _state.value.station?.uuid }
-        val from = if (cur >= 0) cur else if (delta > 0) -1 else 0
-        val n = ((from + delta) % list.size + list.size) % list.size
-        play(context, list[n].value!!)
+        val presets = _presets.value.filterNotNull()
+        if (presets.isNotEmpty()) {
+            play(context, stepIn(presets, delta))
+            return
+        }
+        val list = browseList
+        if (list.isNotEmpty()) {
+            play(context, stepIn(list, delta))
+            return
+        }
+        val app = context.applicationContext
+        val country = _state.value.station?.countryCode?.takeIf { it.isNotEmpty() } ?: RadioCountries.list[RadioCountries.DEFAULT_INDEX].code
+        scope.launch {
+            val top = runCatching { browser.search("", country, null, limit = 40) }.getOrDefault(emptyList())
+            if (top.isNotEmpty()) {
+                browseList = top
+                play(app, stepIn(top, delta))
+            }
+        }
+    }
+
+    private fun stepIn(list: List<RadioStation>, delta: Int) = stepStation(list, _state.value.station?.uuid, delta)
+
+    /** Results of the last STATIONS search (PREV / NEXT use them while no presets are saved). */
+    fun setBrowseList(list: List<RadioStation>) {
+        if (list.isNotEmpty()) browseList = list
     }
 
     fun playPreset(context: Context, index: Int) {
@@ -120,5 +163,31 @@ object NetRadio {
         runCatching { context.startService(i) }
     }
 
+    private fun watchNetwork(context: Context) {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return
+        fun hasInternet(n: Network?) =
+            n != null && cm.getNetworkCapabilities(n)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) == true
+        _online.value = hasInternet(cm.activeNetwork)
+        runCatching {
+            cm.registerDefaultNetworkCallback(object : ConnectivityManager.NetworkCallback() {
+                override fun onAvailable(network: Network) { _online.value = true }
+                override fun onLost(network: Network) { _online.value = hasInternet(cm.activeNetwork) }
+                override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) {
+                    _online.value = caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                }
+            })
+        }
+    }
+
     private fun prefs(context: Context) = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+}
+
+/**
+ * The station [delta] steps away from [currentUuid] in [list], wrapping around. When the current
+ * station isn't in the list, NEXT starts at the first one and PREV at the last.
+ */
+internal fun stepStation(list: List<RadioStation>, currentUuid: String?, delta: Int): RadioStation {
+    val cur = list.indexOfFirst { it.uuid == currentUuid }
+    val from = if (cur >= 0) cur else if (delta > 0) -1 else 0
+    return list[((from + delta) % list.size + list.size) % list.size]
 }
