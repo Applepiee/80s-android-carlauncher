@@ -183,4 +183,34 @@ class RoofMeterTest {
     fun dryVerdictsHaveNoSecondLine() {
         assertEquals(null, RoofMeter.evaluate(inputs(), now).detail)
     }
+
+    @Test
+    fun freezingDryDayScoresZero() {
+        val v = RoofMeter.evaluate(inputs(feels = -2.0), now) // was 4/10 before
+        assertEquals(0, v.score)
+        assertFalse(v.roofDown)
+        assertEquals(RoofTier.BAD, v.tier)
+        assertEquals("ROOF UP · TOO COLD", v.verdict)
+    }
+
+    @Test
+    fun coldScalesDownSteeply() {
+        assertEquals(4, RoofMeter.evaluate(inputs(feels = 8.0), now).score)
+        assertEquals(2, RoofMeter.evaluate(inputs(feels = 4.0), now).score)
+        assertEquals(0, RoofMeter.evaluate(inputs(feels = 1.0), now).score)
+    }
+
+    @Test
+    fun windChillBelowAirTemperatureCounts() {
+        // Air 5 °C, but gusts make it feel like 0 °C.
+        val v = RoofMeter.evaluate(inputs(feels = 0.0, gusts = 40.0).copy(temp = 5.0), now)
+        assertEquals(0, v.score)
+    }
+
+    @Test
+    fun snowIsAlwaysZero() {
+        val v = RoofMeter.evaluate(inputs(feels = 3.0, code = 73), now)
+        assertEquals(0, v.score)
+        assertFalse(v.roofDown)
+    }
 }

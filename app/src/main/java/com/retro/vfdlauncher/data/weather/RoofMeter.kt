@@ -51,8 +51,10 @@ data class RoofVerdict(
  *
  * - Rain: raining now caps the score at 1. Highest rain chance over the next 2 hours:
  *   60%+ costs 6, 40-60% costs 3, 20-40% costs 1.
- * - "Feels like" temperature, now and over the next hour: 18-26 °C is ideal; 14-18 costs 2,
- *   10-14 costs 4, below 10 costs 6; above 30 costs 2.
+ * - "Feels like" temperature (Open-Meteo's apparent temperature, which already includes wind
+ *   chill), now and over the next hour, and never above the air temperature: 18-26 °C is ideal;
+ *   14-18 costs 2, 10-14 costs 4, 6-10 costs 6, 2-6 costs 8, below 2 (near or below freezing)
+ *   costs 10; above 30 costs 2. Snow also scores 0.
  * - Gusts (now and next hour): over 35 km/h costs 1, over 50 km/h costs 2.
  *
  * Roof drawn down from 5; 7+ is teal, 4-6 amber, under 4 red. The verdict looks up to 3 hours
@@ -70,6 +72,9 @@ object RoofMeter {
     /** WMO codes that mean it is raining (drizzle, rain, showers, thunderstorm). */
     private fun isRainCode(code: Int) = code in 51..67 || code in 80..82 || code in 95..99
 
+    /** WMO codes for snow fall, snow grains and snow showers. */
+    private fun isSnowCode(code: Int) = code in 71..77 || code in 85..86
+
     /** Heavy rain, freezing rain, violent showers or thunderstorms: never a top-down drive. */
     private fun isHeavyCode(code: Int) = code in setOf(65, 66, 67, 82) || code in 95..99
 
@@ -84,7 +89,8 @@ object RoofMeter {
         val rainingNow = i.precipitationNow >= 0.1 || isRainCode(i.weatherCode)
         val rainChance = nextTwoHours.maxOfOrNull { it.rainProbability } ?: 0
         val feels = listOf(i.feelsLikeNow) + nextHour.map { it.feelsLike }
-        val coldest = feels.min()
+        // Feels-like can read above the air temperature in still sun; for the cold side use the lower.
+        val coldest = minOf(feels.min(), i.temp)
         val warmest = feels.max()
         val gusts = (listOf(i.gustsNow) + nextHour.map { it.gusts }).max()
         val uv = (listOf(i.uvNow) + nextHour.map { it.uv }).max()
@@ -92,6 +98,8 @@ object RoofMeter {
         var score = 10
         score -= rainPenalty(rainChance)
         score -= when {
+            coldest < 2 -> 10 // near or below freezing: never a top-down drive
+            coldest < 6 -> 8
             coldest < 10 -> 6
             coldest < 14 -> 4
             coldest < 18 -> 2
@@ -103,6 +111,7 @@ object RoofMeter {
             gusts > 35 -> 1
             else -> 0
         }
+        if (isSnowCode(i.weatherCode)) score = 0
         score = score.coerceIn(0, 10)
 
         val rainAt = rainStart(i, now)
