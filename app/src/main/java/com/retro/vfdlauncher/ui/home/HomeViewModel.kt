@@ -53,7 +53,9 @@ data class MusicToggles(val shuffle: Boolean = false, val repeat: Boolean = fals
 
 class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
-    val volumeRepo = VolumeRepository(app)
+    private val kernel = com.retro.vfdlauncher.data.audio.NwdKernel(app)
+    val volumeRepo = VolumeRepository(app, kernel)
+    private val eqKeeper = com.retro.vfdlauncher.data.audio.EqKeeper(app, kernel)
     private val weatherRepo = WeatherRepository(app)
     private val mediaRepo = MediaRepository(app, viewModelScope, volumeRepo)
     private val presetRepo = PresetRepository(app)
@@ -310,6 +312,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     fun onResume() {
         refreshStatus()
         volumeRepo.start()
+        kernel.connect()
+        eqKeeper.start()
         mediaRepo.start()
         if (weatherJob?.isActive != true) {
             weatherJob = viewModelScope.launch {
@@ -358,6 +362,8 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
     override fun onCleared() {
         spectrum.stop()
         volumeRepo.stop()
+        eqKeeper.stop()
+        kernel.disconnect()
         mediaRepo.stop()
     }
 
@@ -560,7 +566,7 @@ class HomeViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---- Inspector ----
     fun openInspector() {
-        _inspector.value = mediaRepo.describeSessions()
+        _inspector.value = (if (kernel.isPresent()) eqKeeper.describe() + "\n" else "") + mediaRepo.describeSessions()
     }
 
     fun closeInspector() {

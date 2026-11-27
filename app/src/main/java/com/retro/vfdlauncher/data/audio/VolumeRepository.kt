@@ -25,7 +25,7 @@ data class Volume(val level: Int, val max: Int, val muted: Boolean = false) {
 }
 
 /** The system media volume (STREAM_MUSIC), kept in sync with the unit's knob and buttons. */
-class VolumeRepository(context: Context) {
+class VolumeRepository(context: Context, private val kernel: NwdKernel? = null) {
 
     private val audio = context.getSystemService(AudioManager::class.java)
     private val resolver = context.contentResolver
@@ -61,6 +61,11 @@ class VolumeRepository(context: Context) {
 
     private fun press(direction: Int) {
         val before = snapshot()
+        // ATOTO/NWD units: the real volume is in the MCU; press its own VOL key through the kernel service.
+        if (kernel?.available == true && direction != AudioManager.ADJUST_TOGGLE_MUTE) {
+            val ok = if (direction == AudioManager.ADJUST_RAISE) kernel.volumeUp() else kernel.volumeDown()
+            if (ok) { report(before, "MCU volume key (kernel)"); return }
+        }
         if (direction == AudioManager.ADJUST_TOGGLE_MUTE) {
             val err = runCatching { systemAdjust(direction) }.exceptionOrNull()
             report(before, "system volume (SHOW_UI)" + (err?.let { " (${it.javaClass.simpleName})" } ?: ""))
@@ -118,6 +123,7 @@ class VolumeRepository(context: Context) {
     fun describe(): String = buildString {
         appendLine("VOLUME")
         appendLine("  fixed=${audio.isVolumeFixed} mode=${audio.mode}")
+        appendLine("  mcu=${mcuVolume()?.let { "${it.level}/${it.max}" } ?: "n/a"} kernel=${kernel?.available}")
         STREAMS.forEach { (name, s) ->
             val v = runCatching { audio.getStreamVolume(s) }.getOrDefault(-1)
             val m = runCatching { audio.getStreamMaxVolume(s) }.getOrDefault(-1)
@@ -127,11 +133,22 @@ class VolumeRepository(context: Context) {
         appendLine("  last: $lastTry")
     }
 
-    private fun read() = Volume(
+    private fun read(): Volume {
+        mcuVolume()?.let { return it }
+        return Volume(
         level = audio.getStreamVolume(AudioManager.STREAM_MUSIC),
         max = audio.getStreamMaxVolume(AudioManager.STREAM_MUSIC),
         muted = audio.isStreamMute(AudioManager.STREAM_MUSIC),
-    )
+        )
+    }
+
+    /** The MCU's volume as the kernel mirrors it into Settings.System (ATOTO S8L: 0..40). */
+    private fun mcuVolume(): Volume? {
+        val level = runCatching { Settings.System.getInt(resolver, "mcu_system_volume", -1) }.getOrDefault(-1)
+        val max = runCatching { Settings.System.getInt(resolver, "mcu_max_volume", -1) }.getOrDefault(-1)
+        if (level < 0 || max <= 0) return null
+        return Volume(level = level, max = max, muted = level == 0)
+    }
 
     fun audioManager(): AudioManager = audio
 
